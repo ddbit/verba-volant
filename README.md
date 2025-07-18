@@ -6,7 +6,7 @@ This software is intended to enhance user privacy in lawful scenarios such as jo
 
 ## Threat Model
 
-The system is designed under the assumption that the server operates outside the reach of any potential attacker. The primary objective is to eliminate the possibility of future forensic analysis on user devices. This means:
+The system is designed under the assumption that the server operates outside the reach of any potential attacker, yet a compromised server won't affect the overall security goals of this app. The primary objective is to eliminate the possibility of future forensic analysis on user devices. This means:
 
 * No persistent logs or data are stored locally or remotely.
 * Messages are never written to disk.
