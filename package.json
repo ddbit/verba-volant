@@ -1,0 +1,25 @@
+{
+  "name": "verba-volant",
+  "version": "1.0.0",
+  "description": "Forensics-resistant web chat service with end-to-end encryption using Diffie-Hellman key exchange",
+  "main": "src/server/index.js",
+  "scripts": {
+    "start": "node src/server/index.js",
+    "dev": "node src/server/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ddbit/verba-volant.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ddbit/verba-volant/issues"
+  },
+  "homepage": "https://github.com/ddbit/verba-volant#readme",
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}

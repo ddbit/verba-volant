@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verba Volant - Secure Chat</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Verba Volant</h1>
+            <p>Secure End-to-End Encrypted Chat</p>
+        </header>
+
+        <main>
+            <div class="room-section">
+                <div class="server-config">
+                    <label for="serverHost">Server:</label>
+                    <input type="text" id="serverHost" value="localhost:31415" placeholder="hostname:port" />
+                </div>
+                <div class="room-controls">
+                    <input type="text" id="roomId" placeholder="Enter Room ID" />
+                    <button id="joinRoom">Join Room</button>
+                </div>
+                <div class="status" id="connectionStatus">Disconnected</div>
+            </div>
+
+            <div class="chat-section" id="chatSection" style="display: none;">
+                <div class="security-status" id="securityStatus">
+                    <span class="security-indicator" id="securityIndicator">🔒</span>
+                    <span id="securityText">Establishing secure connection...</span>
+                </div>
+
+                <div class="chat-container">
+                    <div class="messages" id="messages">
+                        <div class="receive-area">
+                            <h3>Received Messages</h3>
+                            <div id="receivedMessages"></div>
+                        </div>
+                    </div>
+
+                    <div class="send-area">
+                        <h3>Send Message</h3>
+                        <textarea id="messageInput" placeholder="Type your message here..." rows="3"></textarea>
+                        <button id="sendMessage" disabled>Send</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="client.js"></script>
+</body>
+</html>

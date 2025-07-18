@@ -43,6 +43,17 @@ To bootstrap a conversation, Alice generates a random ID and shares it with Bob 
 
 The threat model assumes that the server runs outside the reach of any attacker and aims to prevent any future forensic analysis on the user devices.
 
+**Critical Security Requirement - Client Code Distribution:**
+
+For maximum security, the client code (HTML, JavaScript, CSS) must be distributed separately from the server and never downloaded from the server during runtime. This ensures:
+
+* Users can verify the client code before use
+* No possibility of server-side code injection or tampering
+* Client can be stored locally and used offline for connection
+* Complete separation between server (message routing) and client (encryption)
+
+The client application should be distributed as a self-contained package that users can download, verify, and run independently. The server only provides WebSocket connectivity for message routing.
+
 ---
 
 ## Architecture
