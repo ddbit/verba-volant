@@ -165,13 +165,7 @@ Client A         Server           Client B
 
 ## MITM Attack Mitigation
 
-As an additional defense against man-in-the-middle attacks during the key exchange, the Verba Volant client may generate a 4-digit PIN derived from the user's ephemeral public key (e.g., using SHA-256 and a modulo operation).
-
-This PIN can be shared out-of-band (e.g., via voice call, secure message, or QR code) before the session begins.
-
-The receiving client computes the PIN from the received public key and compares it with the expected value.
-
-If the PINs do not match, the session is considered compromised and should be aborted.
+check MITM.md file for details
 
 ### Practical Out-of-Band Channel Considerations
 
