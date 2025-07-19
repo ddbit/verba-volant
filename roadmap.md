@@ -47,8 +47,8 @@ A forensics-resistant web chat service with end-to-end encryption using Diffie-H
 - [X] Update UI when encryption is ready: change placeholder text, button text to "Send Encrypted", show "Ready for encrypted messaging" status with pulse animation
 
 ### 2.3 Message Encryption Flow
-- [ ] Integrate encryption into message sending
-- [ ] Implement encrypted message format (ciphertext + IV)
+- [+] Take messages from one party, integrate encryption into message sending and the send message to the room so the other party can receive it.
+- [+] Make sure the sending implements encrypted message format (ciphertext + IV)
 - [ ] Add decryption to message receiving
 - [ ] Ensure plaintext messages never persist
 - [ ] Add encryption status indicators

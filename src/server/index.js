@@ -129,6 +129,21 @@ wss.on('connection', (ws) => {
           }
           break;
           
+        case 'encrypted_message':
+          if (ws.roomId) {
+            broadcastToRoom(ws.roomId, {
+              type: 'encrypted_message',
+              data: data.data
+            }, ws);
+            console.log(`Encrypted message relayed in room: ${ws.roomId} from ${data.data.sender}`);
+          } else {
+            ws.send(JSON.stringify({
+              type: 'error',
+              data: { message: 'Not in a room' }
+            }));
+          }
+          break;
+          
         default:
           ws.send(JSON.stringify({
             type: 'echo',

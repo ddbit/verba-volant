@@ -252,18 +252,41 @@ function joinRoom() {
     };
 }
 
-function sendMessage() {
+async function sendMessage() {
     const message = messageInput.value.trim();
     if (!message || !isConnected) return;
     
     console.log('Sending message:', message);
     
-    // Placeholder: Will implement encryption in Phase 2
-    // For now, just clear the input
-    messageInput.value = '';
-    
-    // Simulate message sending
-    displayMessage('You', message, true);
+    if (keyExchangeCompleted && aesKey) {
+        try {
+            // Encrypt the message
+            const encrypted = await encryptMessage(message, aesKey);
+            
+            // Send encrypted message to server
+            const encryptedMessageData = {
+                type: 'encrypted_message',
+                data: {
+                    ciphertext: Array.from(encrypted.ciphertext),
+                    iv: Array.from(encrypted.iv),
+                    sender: userRole
+                }
+            };
+            
+            ws.send(JSON.stringify(encryptedMessageData));
+            
+            // Clear input and show sent message
+            messageInput.value = '';
+            displayMessage('You', message, true);
+            
+            console.log('Encrypted message sent');
+        } catch (error) {
+            console.error('Failed to encrypt and send message:', error);
+            alert('Failed to send encrypted message');
+        }
+    } else {
+        alert('Encryption not ready. Please wait for key exchange to complete.');
+    }
 }
 
 function displayMessage(sender, content, isDelivered = false) {
@@ -282,7 +305,17 @@ function displayMessage(sender, content, isDelivered = false) {
     messageDiv.appendChild(timeDiv);
     
     receivedMessages.appendChild(messageDiv);
-    receivedMessages.scrollTop = receivedMessages.scrollHeight;
+    
+    // Force scroll to bottom with multiple attempts to ensure it sticks
+    const scrollToBottom = () => {
+        receivedMessages.scrollTop = receivedMessages.scrollHeight;
+    };
+    
+    scrollToBottom();
+    setTimeout(scrollToBottom, 10);
+    setTimeout(scrollToBottom, 50);
+    setTimeout(scrollToBottom, 100);
+    requestAnimationFrame(scrollToBottom);
 }
 
 function updateConnectionStatus(status) {
@@ -340,6 +373,10 @@ function handleServerMessage(data) {
             handlePublicKeyReceived(data.data);
             break;
             
+        case 'encrypted_message':
+            handleEncryptedMessage(data.data);
+            break;
+            
         case 'error':
             console.error('Server error:', data.data.message);
             alert('Server error: ' + data.data.message);
@@ -366,7 +403,17 @@ function displaySystemMessage(message) {
     messageDiv.appendChild(timeDiv);
     
     receivedMessages.appendChild(messageDiv);
-    receivedMessages.scrollTop = receivedMessages.scrollHeight;
+    
+    // Force scroll to bottom with multiple attempts to ensure it sticks
+    const scrollToBottom = () => {
+        receivedMessages.scrollTop = receivedMessages.scrollHeight;
+    };
+    
+    scrollToBottom();
+    setTimeout(scrollToBottom, 10);
+    setTimeout(scrollToBottom, 50);
+    setTimeout(scrollToBottom, 100);
+    requestAnimationFrame(scrollToBottom);
 }
 
 function showChatSection() {
@@ -513,5 +560,31 @@ function enableSecureMessaging() {
         sendButton.textContent = 'Send Encrypted';
         
         console.log(`${userRole} is ready for secure messaging`);
+    }
+}
+
+async function handleEncryptedMessage(data) {
+    try {
+        if (!keyExchangeCompleted || !aesKey) {
+            console.error('Received encrypted message but encryption not ready');
+            return;
+        }
+        
+        const ciphertext = new Uint8Array(data.ciphertext);
+        const iv = new Uint8Array(data.iv);
+        const sender = data.sender;
+        
+        console.log('Received encrypted message from:', sender);
+        
+        const decryptedMessage = await decryptMessage(ciphertext, iv, aesKey);
+        
+        // Display the decrypted message
+        const senderName = sender === userRole ? 'You' : sender;
+        displayMessage(senderName, decryptedMessage, true);
+        
+        console.log('Message decrypted and displayed');
+    } catch (error) {
+        console.error('Failed to decrypt received message:', error);
+        displayMessage('System', '❌ Failed to decrypt message', false);
     }
 }
