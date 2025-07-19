@@ -150,15 +150,25 @@ Client A         Server           Client B
 
 ---
 
-## Future Work: Optional MITM Mitigation
+## MITM Attack Mitigation
 
-To eliminate even the minimal risk of a man-in-the-middle (MITM) attack during the key exchange, Verba Volant can be extended to support public key fingerprint verification:
+As an additional defense against man-in-the-middle attacks during the key exchange, the Verba Volant client may generate a 4-digit PIN derived from the user's ephemeral public key (e.g., using SHA-256 and a modulo operation).
+
+This PIN can be shared out-of-band (e.g., via voice call, secure message, or QR code) before the session begins.
+
+The receiving client computes the PIN from the received public key and compares it with the expected value.
+
+If the PINs do not match, the session is considered compromised and should be aborted.
+
+## Future Work: Extended MITM Protection
+
+To further enhance protection, Verba Volant can be extended to support full public key fingerprint verification:
 
 * Each client would compute a fingerprint (e.g., SHA-256 hash) of its ephemeral DH public key.
 * This fingerprint can then be shared out-of-band (alongside the room ID) and verified by the peer before continuing communication.
 * This additional step ensures the authenticity of the key exchange and closes the MITM attack vector.
 
-This enhancement is not part of the initial version and may be considered for future implementation.
+This enhancement may be considered for future implementation.
 
 ---
 
