@@ -6,14 +6,26 @@ This software is intended to enhance user privacy in lawful scenarios such as jo
 
 ## Threat Model
 
-The system is designed under the assumption that the server operates outside the reach of any potential attacker, yet a compromised server won't affect the overall security goals of this app. The primary objective is to eliminate the possibility of future forensic analysis on user devices. This means:
+The system is designed under the assumption that a compromised server won't affect the overall security goals of this app which are: 
+
+- to eliminate the possibility of future forensic analysis on user devices; 
+- to keep conversation private end-to-end. 
+
+This means:
 
 * No persistent logs or data are stored locally or remotely.
 * Messages are never written to disk.
 * Encryption keys are derived ephemerally per session.
 * Only encrypted content is transmitted; metadata is minimized.
 
-The model assumes that Alice and Bob know each other and coordinate the conversation setup through a secure out-of-band channel. The room ID is shared securely and used to bootstrap a private session. If no attacker is present during this exchange, and the Diffie-Hellman key exchange proceeds without tampering, the system is effectively resistant to MITM attacks. The server is assumed to be honest-but-curious.
+The model assumes that Alice and Bob know each other and coordinate the conversation setup through a out-of-band channel. The out-of-band (OOB) channel is assumed to be:
+
+- insecure in terms of privacy: Alice accepts that the attacker is able to observe the messages in the out-of-band channel.
+
+- authenticated: Alice can safely assume that the other end in the out-of-band is Bob.
+
+
+The room ID is shared on the OOB and used to bootstrap a private session. The system shall be resistant to MITM attacks. 
 
 ---
 
@@ -22,9 +34,10 @@ The model assumes that Alice and Bob know each other and coordinate the conversa
 Create a web service that allows two users to:
 
 1. Connect to the same "room".
-2. Perform a secure key exchange using Diffie-Hellman (DH).
-3. Establish a shared key for end-to-end encryption.
-4. Exchange encrypted messages using AES (true E2EE).
+2. Authenticate each other (but not with the server)
+3. Perform a secure key exchange using Diffie-Hellman (DH).
+4. Establish a shared key for end-to-end encryption.
+5. Exchange encrypted messages using AES (true E2EE).
 
 The server handles the connection but **has no access to the messages or the shared key**.
 
@@ -168,15 +181,7 @@ For example, messaging platforms like WhatsApp or Signal — although not anonym
 
 In this sense, authentic but observable channels can act as informal certification authorities, enabling secure bootstrapping of trust without requiring a formal PKI or identity infrastructure.
 
-## Future Work: Extended MITM Protection
 
-To further enhance protection, Verba Volant can be extended to support full public key fingerprint verification:
-
-* Each client would compute a fingerprint (e.g., SHA-256 hash) of its ephemeral DH public key.
-* This fingerprint can then be shared out-of-band (alongside the room ID) and verified by the peer before continuing communication.
-* This additional step ensures the authenticity of the key exchange and closes the MITM attack vector.
-
-This enhancement may be considered for future implementation.
 
 ---
 
