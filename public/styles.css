@@ -199,10 +199,52 @@ header p {
     overflow-y: auto;
 }
 
+.messages-controls {
+    display: flex;
+    justify-content: flex-end;
+    padding: 10px 0;
+    border-bottom: 1px solid #444;
+    margin-bottom: 15px;
+}
+
 .receive-area h3 {
     color: #4a9eff;
     margin-bottom: 15px;
     font-size: 1.1em;
+}
+
+.toggle-all-btn {
+    background: #666;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 15px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.3s;
+    font-weight: bold;
+}
+
+.toggle-all-btn:hover {
+    background: #777;
+}
+
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.message-sender {
+    font-weight: bold;
+    color: #4a9eff;
+    font-size: 0.9em;
+}
+
+.lock-icon {
+    font-size: 14px;
+    user-select: none;
 }
 
 .message {

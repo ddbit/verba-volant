@@ -47,11 +47,13 @@ A forensics-resistant web chat service with end-to-end encryption using Diffie-H
 - [X] Update UI when encryption is ready: change placeholder text, button text to "Send Encrypted", show "Ready for encrypted messaging" status with pulse animation
 
 ### 2.3 Message Encryption Flow
-- [+] Take messages from one party, integrate encryption into message sending and the send message to the room so the other party can receive it.
-- [+] Make sure the sending implements encrypted message format (ciphertext + IV)
-- [ ] Add decryption to message receiving
-- [ ] Ensure plaintext messages never persist
-- [ ] Add encryption status indicators
+- [X] Integrate encryption into message sending: check keyExchangeCompleted && aesKey, encrypt with encryptMessage(), send as 'encrypted_message' type with ciphertext/iv arrays and sender role
+- [X] Implement encrypted message format with server relay: ciphertext + IV as byte arrays, sender identification, server broadcasts to room excluding sender
+- [X] Default encrypted display with individual toggle: messages show encrypted by default (globalShowPlaintext=false), each message has lock/unlock icon (🔒/🔓) in message header beside sender name, click toggles between hex preview and plaintext
+- [X] Individual message encryption toggle: both sent and received messages have clickable lock icons, encrypted text shows as "🔒 [hex20bytes...]", stores encryptedData and plaintextContent on messageDiv DOM element
+- [X] Global lock/unlock all button: positioned below security status outside scrolling area, button text shows action to perform ("🔓 Unlock All" when locked, "🔒 Lock All" when unlocked), applies to all messages with encryption data
+- [X] Message structure with encryption: message header contains sender name and lock icon, message content shows encrypted hex or plaintext based on state, auto-scroll with multiple timing attempts for visibility
+
 
 ## Phase 3: Security & Privacy Features (Milestone 3)
 

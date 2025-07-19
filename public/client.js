@@ -18,6 +18,7 @@ const sendButton = document.getElementById('sendMessage');
 const receivedMessages = document.getElementById('receivedMessages');
 const userIdentity = document.getElementById('userIdentity');
 const userName = document.getElementById('userName');
+const toggleAllButton = document.getElementById('toggleAllMessages');
 
 // State
 let ws = null;
@@ -29,6 +30,7 @@ let remotePublicKey = null;
 let keyExchangeCompleted = false;
 let userRole = null;
 let aesKey = null;
+let globalShowPlaintext = false;
 
 // Cryptographic functions
 async function generateKeyPair() {
@@ -185,6 +187,7 @@ async function decryptMessage(ciphertext, iv, aesKey) {
 joinRoomButton.addEventListener('click', joinRoom);
 leaveRoomButton.addEventListener('click', leaveRoom);
 sendButton.addEventListener('click', sendMessage);
+toggleAllButton.addEventListener('click', toggleAllMessages);
 messageInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -275,9 +278,10 @@ async function sendMessage() {
             
             ws.send(JSON.stringify(encryptedMessageData));
             
-            // Clear input and show sent message
+            // Clear input and show sent message with encryption data
             messageInput.value = '';
-            displayMessage('You', message, true);
+            const encryptedData = { ciphertext: encrypted.ciphertext, iv: encrypted.iv };
+            displayMessage('You', message, true, encryptedData);
             
             console.log('Encrypted message sent');
         } catch (error) {
@@ -289,18 +293,51 @@ async function sendMessage() {
     }
 }
 
-function displayMessage(sender, content, isDelivered = false) {
+function displayMessage(sender, content, isDelivered = false, encryptedData = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isDelivered ? 'delivered' : ''}`;
     
+    const messageHeader = document.createElement('div');
+    messageHeader.className = 'message-header';
+    
+    const senderSpan = document.createElement('span');
+    senderSpan.className = 'message-sender';
+    senderSpan.textContent = sender;
+    messageHeader.appendChild(senderSpan);
+    
+    if (encryptedData) {
+        const lockIcon = document.createElement('span');
+        lockIcon.className = 'lock-icon';
+        lockIcon.textContent = globalShowPlaintext ? '🔓' : '🔒';
+        lockIcon.style.cursor = 'pointer';
+        lockIcon.style.marginLeft = '10px';
+        lockIcon.title = globalShowPlaintext ? 'Click to show encrypted' : 'Click to show decrypted';
+        
+        lockIcon.addEventListener('click', () => {
+            toggleMessageDisplay(messageDiv, content, encryptedData, lockIcon);
+        });
+        
+        messageHeader.appendChild(lockIcon);
+        messageDiv.encryptedData = encryptedData;
+        messageDiv.plaintextContent = content;
+    }
+    
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-    contentDiv.textContent = content;
+    
+    // Show encrypted text by default if encryption data exists
+    if (encryptedData && !globalShowPlaintext) {
+        const encryptedText = `🔒 [${Array.from(encryptedData.ciphertext).slice(0, 20).map(b => b.toString(16).padStart(2, '0')).join('')}...]`;
+        contentDiv.textContent = encryptedText;
+    } else {
+        contentDiv.textContent = content;
+    }
     
     const timeDiv = document.createElement('div');
     timeDiv.className = 'message-time';
     timeDiv.textContent = new Date().toLocaleTimeString();
     
+    messageDiv.appendChild(messageHeader);
     messageDiv.appendChild(contentDiv);
     messageDiv.appendChild(timeDiv);
     
@@ -550,6 +587,49 @@ async function displaySharedSecretInfo() {
     }
 }
 
+function toggleMessageDisplay(messageDiv, plaintextContent, encryptedData, lockIcon) {
+    const contentDiv = messageDiv.querySelector('.message-content');
+    const isShowingPlaintext = lockIcon.textContent === '🔓';
+    
+    if (isShowingPlaintext) {
+        // Show encrypted version
+        const encryptedText = `🔒 [${Array.from(encryptedData.ciphertext).slice(0, 20).map(b => b.toString(16).padStart(2, '0')).join('')}...]`;
+        contentDiv.textContent = encryptedText;
+        lockIcon.textContent = '🔒';
+        lockIcon.title = 'Click to show decrypted';
+    } else {
+        // Show plaintext version
+        contentDiv.textContent = plaintextContent;
+        lockIcon.textContent = '🔓';
+        lockIcon.title = 'Click to show encrypted';
+    }
+}
+
+function toggleAllMessages() {
+    globalShowPlaintext = !globalShowPlaintext;
+    toggleAllButton.textContent = globalShowPlaintext ? '🔒 Lock All' : '🔓 Unlock All';
+    
+    // Update all messages with encryption data
+    const messages = receivedMessages.querySelectorAll('.message');
+    messages.forEach(messageDiv => {
+        if (messageDiv.encryptedData && messageDiv.plaintextContent) {
+            const contentDiv = messageDiv.querySelector('.message-content');
+            const lockIcon = messageDiv.querySelector('.lock-icon');
+            
+            if (globalShowPlaintext) {
+                contentDiv.textContent = messageDiv.plaintextContent;
+                lockIcon.textContent = '🔓';
+                lockIcon.title = 'Click to show encrypted';
+            } else {
+                const encryptedText = `🔒 [${Array.from(messageDiv.encryptedData.ciphertext).slice(0, 20).map(b => b.toString(16).padStart(2, '0')).join('')}...]`;
+                contentDiv.textContent = encryptedText;
+                lockIcon.textContent = '🔒';
+                lockIcon.title = 'Click to show decrypted';
+            }
+        }
+    });
+}
+
 function enableSecureMessaging() {
     if (keyExchangeCompleted && aesKey) {
         displaySystemMessage('✅ Both participants ready - encrypted messaging enabled');
@@ -578,9 +658,10 @@ async function handleEncryptedMessage(data) {
         
         const decryptedMessage = await decryptMessage(ciphertext, iv, aesKey);
         
-        // Display the decrypted message
+        // Display the message with encryption toggle capability
         const senderName = sender === userRole ? 'You' : sender;
-        displayMessage(senderName, decryptedMessage, true);
+        const encryptedData = { ciphertext, iv };
+        displayMessage(senderName, decryptedMessage, true, encryptedData);
         
         console.log('Message decrypted and displayed');
     } catch (error) {
