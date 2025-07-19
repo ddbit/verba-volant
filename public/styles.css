@@ -33,6 +33,16 @@ header p {
     font-size: 1.1em;
 }
 
+.user-identity {
+    background: #333;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
+    text-align: center;
+    font-weight: bold;
+    color: #4a9eff;
+}
+
 .room-section {
     background: #2a2a2a;
     padding: 20px;
@@ -156,6 +166,23 @@ header p {
 .security-status.insecure {
     background: #d32f2f;
     color: #ffcdd2;
+}
+
+.security-status.key-exchange {
+    background: #ff6f00;
+    color: #ffe0b2;
+}
+
+.security-status.secure {
+    background: #1b5e20;
+    color: #4caf50;
+    animation: pulse-secure 2s ease-in-out;
+}
+
+@keyframes pulse-secure {
+    0% { background: #1b5e20; }
+    50% { background: #2e7d32; }
+    100% { background: #1b5e20; }
 }
 
 .chat-container {

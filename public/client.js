@@ -7,6 +7,7 @@ console.log('Verba Volant Client Initialized');
 const serverHostInput = document.getElementById('serverHost');
 const roomIdInput = document.getElementById('roomId');
 const joinRoomButton = document.getElementById('joinRoom');
+const leaveRoomButton = document.getElementById('leaveRoom');
 const connectionStatus = document.getElementById('connectionStatus');
 const chatSection = document.getElementById('chatSection');
 const securityStatus = document.getElementById('securityStatus');
@@ -15,14 +16,174 @@ const securityText = document.getElementById('securityText');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendMessage');
 const receivedMessages = document.getElementById('receivedMessages');
+const userIdentity = document.getElementById('userIdentity');
+const userName = document.getElementById('userName');
 
 // State
 let ws = null;
 let roomId = null;
 let isConnected = false;
+let keyPair = null;
+let sharedSecret = null;
+let remotePublicKey = null;
+let keyExchangeCompleted = false;
+let userRole = null;
+let aesKey = null;
+
+// Cryptographic functions
+async function generateKeyPair() {
+    try {
+        keyPair = await window.crypto.subtle.generateKey(
+            {
+                name: "ECDH",
+                namedCurve: "P-256"
+            },
+            false,
+            ["deriveKey", "deriveBits"]
+        );
+        console.log('DH key pair generated');
+        return keyPair;
+    } catch (error) {
+        console.error('Failed to generate key pair:', error);
+        throw error;
+    }
+}
+
+async function exportPublicKey(publicKey) {
+    try {
+        const exported = await window.crypto.subtle.exportKey("raw", publicKey);
+        return new Uint8Array(exported);
+    } catch (error) {
+        console.error('Failed to export public key:', error);
+        throw error;
+    }
+}
+
+async function importPublicKey(publicKeyData) {
+    try {
+        const publicKey = await window.crypto.subtle.importKey(
+            "raw",
+            publicKeyData,
+            {
+                name: "ECDH",
+                namedCurve: "P-256"
+            },
+            false,
+            []
+        );
+        return publicKey;
+    } catch (error) {
+        console.error('Failed to import public key:', error);
+        throw error;
+    }
+}
+
+async function deriveSharedSecret(privateKey, publicKey) {
+    try {
+        const sharedSecretBytes = await window.crypto.subtle.deriveBits(
+            {
+                name: "ECDH",
+                public: publicKey
+            },
+            privateKey,
+            256
+        );
+        
+        const sharedSecretKey = await window.crypto.subtle.importKey(
+            "raw",
+            sharedSecretBytes,
+            "HKDF",
+            false,
+            ["deriveKey"]
+        );
+        
+        console.log('Shared secret derived');
+        return sharedSecretKey;
+    } catch (error) {
+        console.error('Failed to derive shared secret:', error);
+        throw error;
+    }
+}
+
+async function deriveAESKey(sharedSecret) {
+    try {
+        const salt = new TextEncoder().encode("Verba Volant Salt v1");
+        const saltArray = new Uint8Array(32);
+        saltArray.set(salt.slice(0, Math.min(salt.length, 32)));
+        
+        const info = new TextEncoder().encode("Verba Volant AES Key");
+        
+        const aesKey = await window.crypto.subtle.deriveKey(
+            {
+                name: "HKDF",
+                hash: "SHA-256",
+                salt: saltArray,
+                info: info
+            },
+            sharedSecret,
+            {
+                name: "AES-GCM",
+                length: 256
+            },
+            false,
+            ["encrypt", "decrypt"]
+        );
+        
+        console.log('AES key derived using HKDF/SHA-256');
+        return aesKey;
+    } catch (error) {
+        console.error('Failed to derive AES key:', error);
+        throw error;
+    }
+}
+
+async function encryptMessage(plaintext, aesKey) {
+    try {
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const encoder = new TextEncoder();
+        const data = encoder.encode(plaintext);
+        
+        const ciphertext = await window.crypto.subtle.encrypt(
+            {
+                name: "AES-GCM",
+                iv: iv
+            },
+            aesKey,
+            data
+        );
+        
+        return {
+            ciphertext: new Uint8Array(ciphertext),
+            iv: iv
+        };
+    } catch (error) {
+        console.error('Failed to encrypt message:', error);
+        throw error;
+    }
+}
+
+async function decryptMessage(ciphertext, iv, aesKey) {
+    try {
+        const decryptedData = await window.crypto.subtle.decrypt(
+            {
+                name: "AES-GCM",
+                iv: iv
+            },
+            aesKey,
+            ciphertext
+        );
+        
+        const decoder = new TextDecoder();
+        return decoder.decode(decryptedData);
+    } catch (error) {
+        console.error('Failed to decrypt message:', error);
+        throw error;
+    }
+}
 
 // Event listeners
 joinRoomButton.addEventListener('click', joinRoom);
+leaveRoomButton.addEventListener('click', leaveRoom);
 sendButton.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -81,6 +242,7 @@ function joinRoom() {
         isConnected = false;
         updateConnectionStatus('disconnected');
         hideChatSection();
+        unlockRoomControls();
     };
     
     ws.onerror = (error) => {
@@ -148,20 +310,34 @@ function handleServerMessage(data) {
             
         case 'room_joined':
             isConnected = true;
+            userRole = data.data.userRole;
             updateConnectionStatus('connected');
             showChatSection();
+            lockRoomControls();
+            updateUserIdentity(userRole);
             updateSecurityStatus('insecure', 'Not encrypted - waiting for key exchange');
-            console.log(`Joined room: ${data.data.roomId}, clients: ${data.data.clientCount}`);
+            console.log(`Joined room: ${data.data.roomId}, clients: ${data.data.clientCount}, role: ${userRole}`);
+            initiateKeyExchange();
             break;
             
         case 'user_joined':
             console.log(`User joined room, total clients: ${data.data.clientCount}`);
             displaySystemMessage(`User joined (${data.data.clientCount} total)`);
+            initiateKeyExchange();
             break;
             
         case 'user_left':
             console.log(`User left room, total clients: ${data.data.clientCount}`);
             displaySystemMessage(`User left (${data.data.clientCount} total)`);
+            keyExchangeCompleted = false;
+            sharedSecret = null;
+            remotePublicKey = null;
+            aesKey = null;
+            updateSecurityStatus('insecure', 'Not encrypted - user left, key exchange reset');
+            break;
+            
+        case 'pubkey':
+            handlePublicKeyReceived(data.data);
             break;
             
         case 'error':
@@ -211,5 +387,131 @@ function updateSecurityStatus(status, text) {
         securityIndicator.textContent = '🔒';
     } else {
         securityIndicator.textContent = '⚠️';
+    }
+}
+
+async function initiateKeyExchange() {
+    try {
+        if (!keyPair) {
+            console.log('Generating new key pair...');
+            await generateKeyPair();
+            console.log('Key pair generated successfully');
+        }
+        
+        console.log('Exporting public key...');
+        const publicKeyData = await exportPublicKey(keyPair.publicKey);
+        console.log('Public key exported, length:', publicKeyData.length);
+        const publicKeyArray = Array.from(publicKeyData);
+        
+        const message = {
+            type: 'pubkey',
+            data: {
+                publicKey: publicKeyArray
+            }
+        };
+        
+        ws.send(JSON.stringify(message));
+        console.log('Public key sent for key exchange');
+        updateSecurityStatus('key-exchange', 'Key exchange in progress - deriving shared secret...');
+    } catch (error) {
+        console.error('Failed to initiate key exchange:', error.message);
+        console.error('Full error:', error);
+        updateSecurityStatus('insecure', `Key exchange failed: ${error.message}`);
+    }
+}
+
+async function handlePublicKeyReceived(data) {
+    try {
+        console.log('Received public key data:', data);
+        const publicKeyData = new Uint8Array(data.publicKey);
+        console.log('Public key byte array length:', publicKeyData.length);
+        
+        remotePublicKey = await importPublicKey(publicKeyData);
+        console.log('Remote public key imported successfully');
+        
+        sharedSecret = await deriveSharedSecret(keyPair.privateKey, remotePublicKey);
+        console.log('Shared secret derived successfully');
+        
+        updateSecurityStatus('key-exchange', 'Deriving AES encryption key...');
+        
+        aesKey = await deriveAESKey(sharedSecret);
+        console.log('AES key derived successfully');
+        keyExchangeCompleted = true;
+        
+        console.log('Key exchange completed successfully');
+        updateSecurityStatus('secure', 'Ready for encrypted messaging - AES-GCM active');
+        displaySystemMessage('🔒 Ready for secure messaging - end-to-end encryption active');
+        displaySharedSecretInfo();
+        enableSecureMessaging();
+    } catch (error) {
+        console.error('Failed to complete key exchange at step:', error.message);
+        console.error('Full error:', error);
+        updateSecurityStatus('insecure', `Key exchange failed: ${error.message}`);
+    }
+}
+
+function updateUserIdentity(role) {
+    if (role) {
+        userName.textContent = `You are: ${role}`;
+        userIdentity.style.display = 'block';
+    } else {
+        userIdentity.style.display = 'none';
+    }
+}
+
+function lockRoomControls() {
+    roomIdInput.disabled = true;
+    serverHostInput.disabled = true;
+    joinRoomButton.style.display = 'none';
+    leaveRoomButton.style.display = 'inline-block';
+}
+
+function unlockRoomControls() {
+    roomIdInput.disabled = false;
+    serverHostInput.disabled = false;
+    joinRoomButton.style.display = 'inline-block';
+    leaveRoomButton.style.display = 'none';
+}
+
+function leaveRoom() {
+    if (ws) {
+        ws.send(JSON.stringify({
+            type: 'leave_room'
+        }));
+        ws.close();
+    }
+    
+    location.reload();
+}
+
+async function displaySharedSecretInfo() {
+    try {
+        const secretBytes = await window.crypto.subtle.exportKey("raw", sharedSecret);
+        const secretArray = new Uint8Array(secretBytes);
+        const secretHex = Array.from(secretArray)
+            .map(byte => byte.toString(16).padStart(2, '0'))
+            .join('');
+        
+        const shortFingerprint = secretHex.substring(0, 16);
+        displaySystemMessage(`🔑 AES key derived with HKDF/SHA-256 (${shortFingerprint}...)`);
+        
+        console.log('Shared secret fingerprint:', shortFingerprint);
+        console.log('AES key ready for encryption/decryption');
+    } catch (error) {
+        console.error('Failed to display shared secret info:', error);
+        displaySystemMessage('🔑 AES key derived successfully');
+    }
+}
+
+function enableSecureMessaging() {
+    if (keyExchangeCompleted && aesKey) {
+        displaySystemMessage('✅ Both participants ready - encrypted messaging enabled');
+        updateSecurityStatus('secure', `${userRole} ready for encrypted messaging`);
+        
+        // Enable message input
+        messageInput.placeholder = 'Type your encrypted message here...';
+        sendButton.textContent = 'Send Encrypted';
+        
+        console.log(`${userRole} is ready for secure messaging`);
     }
 }

@@ -11,6 +11,9 @@
         <header>
             <h1>Verba Volant</h1>
             <p>Secure End-to-End Encrypted Chat</p>
+            <div class="user-identity" id="userIdentity" style="display: none;">
+                <span id="userName"></span>
+            </div>
         </header>
 
         <main>
@@ -22,6 +25,7 @@
                 <div class="room-controls">
                     <input type="text" id="roomId" placeholder="Enter Room ID" />
                     <button id="joinRoom">Join Room</button>
+                    <button id="leaveRoom" style="display: none;">Leave Room</button>
                 </div>
                 <div class="status" id="connectionStatus">Disconnected</div>
             </div>

@@ -21,28 +21,30 @@ A forensics-resistant web chat service with end-to-end encryption using Diffie-H
 
 ### 1.3 Basic Client Interface
 - [X] Create HTML structure with Send and Receive areas
-- [X] Implement room join functionality
+- [X] Implement room join functionality, only two participants allowed Alice and Bob. Also in the webpage, put name 'Alice' in the UI. When the second user joins put name 'Bob' in his UI. Do not accept more participants.
 - [X] Add basic WebSocket client connection
 - [X] Create message input/output interface
 - [X] Add connection status indicators
+- [X] Once connected to a room the room id can't be changed by user, add a leave button and reload the page as a fresh session
 
 **Security Requirement**: All client code must be self-contained and never downloaded from the server. Client files should be distributed separately for user verification and local execution.
 
 ## Phase 2: Cryptographic Implementation (Milestone 2)
 
 ### 2.1 Diffie-Hellman Key Exchange
-- [ ] Implement DH key pair generation using Web Crypto API
-- [ ] Create key exchange message format (pubkey type)
-- [ ] Add public key transmission via WebSocket
-- [ ] Implement shared secret derivation from DH exchange
-- [ ] Add key exchange state management
+- [X] Implement DH key pair generation using Web Crypto API with both "deriveKey" and "deriveBits" usages for ECDH operations
+- [X] Create key exchange message format (pubkey type)
+- [X] Add public key transmission via WebSocket
+- [X] Implement shared secret derivation from DH exchange using deriveBits() to get raw key material for HKDF input, show in the UI of participants that the secret has been derived.
+- [X] Add key exchange state management
 
 ### 2.2 AES-GCM Encryption System
-- [ ] Implement AES key derivation using HKDF/SHA-256
-- [ ] Create AES-GCM encryption functions
-- [ ] Add IV/nonce generation for each message
-- [ ] Implement decryption functions
-- [ ] Add encryption error handling
+- [X] Implement AES key derivation using HKDF/SHA-256 from ECDH raw key material, use deterministic salt for consistent key derivation between participants, update status in UI when AES key is ready
+- [X] Create AES-GCM encryption functions with encryptMessage() that generates random 12-byte IV and returns {ciphertext, iv} object
+- [X] Add IV/nonce generation for each message using crypto.getRandomValues() with 12 bytes for GCM mode
+- [X] Implement decryption functions with decryptMessage() that takes ciphertext, iv, and aesKey parameters
+- [X] Add encryption error handling with try-catch blocks and detailed error logging
+- [X] Update UI when encryption is ready: change placeholder text, button text to "Send Encrypted", show "Ready for encrypted messaging" status with pulse animation
 
 ### 2.3 Message Encryption Flow
 - [ ] Integrate encryption into message sending

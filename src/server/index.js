@@ -21,16 +21,29 @@ function joinRoom(ws, roomId) {
   }
   
   const room = rooms.get(roomId);
+  
+  if (room.size >= 2) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      data: { message: 'Room is full. Only Alice and Bob are allowed.' }
+    }));
+    return;
+  }
+  
   room.add(ws);
   ws.roomId = roomId;
   
-  console.log(`Client joined room: ${roomId} (${room.size} clients in room)`);
+  const userRole = room.size === 1 ? 'Alice' : 'Bob';
+  ws.userRole = userRole;
+  
+  console.log(`Client joined room: ${roomId} as ${userRole} (${room.size} clients in room)`);
   
   ws.send(JSON.stringify({
     type: 'room_joined',
     data: { 
       roomId: roomId,
-      clientCount: room.size
+      clientCount: room.size,
+      userRole: userRole
     }
   }));
   
@@ -99,6 +112,21 @@ wss.on('connection', (ws) => {
             type: 'room_left',
             data: { message: 'Left room successfully' }
           }));
+          break;
+          
+        case 'pubkey':
+          if (ws.roomId) {
+            broadcastToRoom(ws.roomId, {
+              type: 'pubkey',
+              data: data.data
+            }, ws);
+            console.log(`Public key relayed in room: ${ws.roomId}`);
+          } else {
+            ws.send(JSON.stringify({
+              type: 'error',
+              data: { message: 'Not in a room' }
+            }));
+          }
           break;
           
         default:
