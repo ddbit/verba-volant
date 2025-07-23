@@ -145,22 +145,7 @@ The client application should be distributed as a self-contained package that us
 }
 ```
 
----
 
-## MITM Attack Mitigation
-
-check [bootstrapping.md](./bootstrapping.md) file for details
-
-### Practical Out-of-Band Channel Considerations
-
-In practice, if users have access to an out-of-band channel that is not confidential (i.e., messages may be observed) but is authentic (i.e., the identity of the counterpart is known and trusted), that channel can serve as a lightweight certification mechanism for verifying the authenticity of a public key.
-
-For example, messaging platforms like WhatsApp or Signal — although not anonymous or metadata-free — offer identity persistence and authentication guarantees. If Alice receives an authentication code from Bob via such a channel, and she knows it's really Bob, she can reasonably assume the key is authentic, even if the message may be observable.
-
-In this sense, authentic but observable channels can act as informal certification authorities, enabling secure bootstrapping of trust without requiring a formal PKI or identity infrastructure.
-
-
----
 
 ## Comparison with Nostr, Signal, and Verba Volant
 
