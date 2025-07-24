@@ -72,25 +72,6 @@ The default and recommended value is **N = 5**, which is used in the following a
 
 Conclusion: Forgery is infeasible under realistic time/resource constraints.
 
----
-
-**Comparison with Signal's ZRTP Short Authentication String (SAS)**
-
-| Feature                    | Signal ZRTP SAS                    | Verba Volant Fingerprint            |
-| -------------------------- | ---------------------------------- | ----------------------------------- |
-| Key persistence            | Required (long-term ID + pre-keys) | None (ephemeral keys only)          |
-| Hash input basis           | Shared secret (post-handshake)     | Public keys only (pre-handshake)    |
-| Authcode format            | 6 digits or 2 words (24 bits)      | N BIP39 words (default: 5, 55 bits) |
-| Verification direction     | Mutual                             | One-way (sufficient for both sides) |
-| Role of human verification | Confirmation after secure session  | Bootstraps trust before encryption  |
-| Identity traceability      | Persistent                         | Stateless and unlinkable            |
-| Suitable for               | Ongoing secure communication       | Temporary, untraceable exchanges    |
-
----
-
-**Justification**
-Signal's ZRTP SAS is used *after* secure session establishment and based on long-term identities. Verba Volant provides a stateless alternative, authenticating users in real time with no persistent identifiers. This aligns with the project’s goal:
-
 > **You shall not track.**
 
 The N-word BIP39 fingerprint is short enough for voice-based or messaging-based confirmation and strong enough to resist forgery during the limited verification window. Users can adjust N according to their threat model and tolerance for manual verification effort.
