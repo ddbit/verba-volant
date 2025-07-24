@@ -76,6 +76,9 @@ Conclusion: Forgery is infeasible under realistic time/resource constraints.
 
 The N-word BIP39 fingerprint is short enough for voice-based or messaging-based confirmation and strong enough to resist forgery during the limited verification window. Users can adjust N according to their threat model and tolerance for manual verification effort.
 
+![You shall not track](./shall-not-track.png)
+
+
 ---
 
 **Summary**
