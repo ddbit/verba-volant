@@ -1,166 +1,90 @@
-# Verba Volant: Technical Specifications for a Forensics resistant Web Chat Service with Diffie-Hellman
+# Verba Volant
+
+**Privacy without traces. Ephemeral and secure communication.**
+
+## What is Verba Volant
+
+Verba Volant is a messaging application designed for those who need the highest level of privacy and **forensic resistance**. Its goal is simple and radical: **no message should leave a trace**, neither on the user’s device nor on the server.
+
+Unlike apps like Signal, Telegram, or WhatsApp, which store encrypted messages on disk or create automatic backups, Verba Volant works completely differently:
+
+* No phone number or identity required
+* No message ever written to disk
+* No backup or logging, on client or server
+* No automatic message decryption
+* No persistence: everything lives only in browser RAM, and only when necessary
+
+---
+
+## Goals
+
+* Ensure **complete confidentiality** in conversations
+* Provide a **forensically clean** system: nothing to recover, even after deep analysis
+* Protect against **man-in-the-middle attacks**
+* Eliminate the need for persistent identifiers or keys
+* Offer a tool that is simple to use, but extremely secure
+
+---
+
+## How it works (briefly)
+
+1. **Alice creates a “room”**: a shared code (Room ID) that identifies the conversation.
+2. **Bob receives this code** from Alice through a separate channel (e.g., SMS, voice, etc.).
+3. Both browsers connect via WebSocket and exchange **ephemeral ECDH keys**.
+4. Both derive a shared secret key.
+5. Alice sends Bob a “verification code” made of words, which Bob checks to confirm authenticity.
+6. Only after confirmation, messages can be sent and read.
+
+---
+
+## What makes Verba Volant unique
+
+One of its most distinctive features is the use of **BIP39 words**—commonly used in cryptocurrency wallets—for manual fingerprint verification. This gives Verba Volant a rare combination of cryptographic strength and human readability, enabling users to verify key authenticity with minimal effort.
+
+### 🔐 True end-to-end encryption
+
+Keys are generated locally and **never known to the server**. No message ever travels in plaintext. Not even for a millisecond.
+
+### 🧠 Decryption only on request
+
+Messages are visible only **if the user activates them** manually. They remain encrypted in the browser's RAM until the user chooses to read them.
+
+### 🗑️ No traces, ever
+
+No disk writes. No cache. No logs. No IndexedDB. The message exists only in the **DOM**, in RAM, and only temporarily.
+
+### 🕵️‍♂️ Forensic attack resistance
+
+Even professional tools cannot recover messages **after the page is closed**. The only possible attack? Malware actively inspecting RAM **while the user is reading the message**.
+
+### ⚖️ Simple human verification
+
+To prevent MITM attacks, users compare a 5-word (customizable) code via a separate channel. If the words match, the exchange is authentic.
+
+These words are selected from the well-known **BIP39 dictionary** (used in cryptocurrency wallets), making them both easy to read aloud and resistant to forgery. This design provides a strong balance between usability and cryptographic integrity.
+
+---
+
+## When to use it
+
+* When confidentiality is not optional, but essential
+* For sensitive conversations between journalists, activists, researchers, companies
+* When you want to ensure that **no server, OS, or passive malware** can recover messages
+
+> "You shall not track."
+
+---
+
+## Technology in brief
+
+* **ECDH** on standard curves (P-256 or X25519)
+* **AES-GCM** for symmetric encryption
+* **SHA-256 + BIP39** for manual fingerprint verification
+* Frontend in HTML/JS, backend with WebSocket for relaying (but cannot read anything)
+* Offline distribution: the client can be used without ever downloading code from the server
+
+---
 
 ## Disclaimer
 
-This software is intended to enhance user privacy in lawful scenarios such as journalism, corporate confidentiality, and personal communication. It is not designed, intended, or recommended for any use that violates the law.
-
-
-## Objectives
-
-- to eliminate the possibility of future forensic analysis on user devices; 
-- to keep conversation private end-to-end. 
-- to be robust against a compromised server (used to route messages)
-- to be robust against man-in-the-middle attacks
-- to not require PGP or other setup to authenticate identities 
-
-
-## Threat Model
-
-
-The model assumes that Alice and Bob know each other and coordinate the conversation setup through a out-of-band channel. The out-of-band (OOB) channel is assumed to be:
-
-- insecure in terms of privacy: Alice accepts that the attacker Charlie is able to observe all the messages in the out-of-band channel.
-
-- authenticated: Alice can safely assume that the other end in the out-of-band is Bob. The attacker Charlie can't manipulate messages or impersonate other people.
-
-
-The room ID is shared on the OOB and used to bootstrap a private session. The system shall be resistant to MITM attacks.
-
----
-
-## Solution
-
-
-Create a web service that allows two users to:
-
-1. Connect to the same "room".
-2. Perform a secure key exchange using Diffie-Hellman (DH).
-3. Authenticate each other public key 
-4. Establish a shared key for end-to-end encryption.
-5. Exchange encrypted messages using AES (true E2EE).
-
-
-The server handles the connection but **has no access to the messages or the shared key**.
-
-No message or event will be stored on the server, and to prevent any forensic analysis, the client operates in the following way:
-
-* Alice writes a new message in a dedicated Send text area; the message is never stored on local or remote disk.
-* The message exists only in the DOM.
-* Once the message is sent to Bob, and Bob's client acknowledges receipt, the message is marked as delivered (but not necessarily read) on Alice's side.
-* Bob receives the message in a dedicated Receive area and can reply using his own Send component, functioning in the same way as Alice’s.
-
-The rationale is that messages remain only as long as needed and no logs or events are recorded locally or online. Forensic analysis should be unable to recover conversations from user devices. Likewise, data recovery from the online server is not possible, as chats are end-to-end encrypted.
-
-To bootstrap a conversation, Alice generates a random ID and shares it with Bob through the selected out-of-band channel.
-
-**Important Note:** Although deriving the AES key directly from the shared room ID might appear simpler, this approach would allow the server (which knows the room ID) to recreate the encryption key, defeating the purpose of E2EE. Therefore, the system uses a Diffie-Hellman key exchange to ensure the encryption key is never exposed to the server.
-
-The threat model assumes that the server runs outside the reach of any attacker and aims to prevent any future forensic analysis on the user devices.
-
-**Client Code Distribution:**
-
-For maximum security, the client code (HTML, JavaScript, CSS) must be distributed separately from the server and never downloaded from the server during runtime. This ensures:
-
-* Users can verify the client code before use
-* No possibility of server-side code injection or tampering
-* Client can be stored locally and used offline for connection
-* Complete separation between server (message routing) and client (encryption)
-
-The client application should be distributed as a self-contained package that users can download, verify, and run independently. The server only provides WebSocket connectivity for message routing.
-
----
-
-
-## Technology Stack
-
-| Component  | Technologies                                    |
-| ---------- | ----------------------------------------------- |
-| Backend    | Node.js + WebSocket (`ws`)                      |
-| Frontend   | HTML + JavaScript (vanilla or optionally React) |
-| Crypto     | Web Crypto API (browser) / Node.js `crypto`     |
-| Encryption | AES-GCM with key derived from DH                |
-| Keys       | Diffie-Hellman (ECDH over P-256 or X25519)      |
-
----
-
-## System Features
-
-### 1. Room Management
-
-* User A creates a room (unique ID or name)
-* User B joins the same room
-* The server manages only message routing (WebSocket rooms)
-
-### 2. DH Key Exchange
-
-* Clients generate ephemeral DH key pairs
-* Exchange public keys via WebSocket
-* Derive the shared key client-side
-
-### 3. AES Key Derivation
-
-* HKDF/SHA-256 from DH secret
-* AES-GCM for encryption/decryption
-* Random IV (nonce) per message
-
-### 4. Encrypted Message Exchange
-
-* Messages are encrypted client-side with AES-GCM
-* The server only relays encrypted messages
-* The server stores nothing (RAM only or stateless)
-* The client does not persist messages locally
-
----
-
-## Privacy & Security
-
-| Aspect                | Status     | Notes                                            |
-| --------------------- | ---------- | ------------------------------------------------ |
-| End-to-End Encryption | ✅ Active   | No private keys on server                        |
-| Forward Secrecy       | ✅ Yes      | Thanks to ephemeral DH                           |
-| Visible Metadata      | ✅ Limited  | Only IP, unless using Tor/VPN                    |
-| Message Persistence   | ❌ No       | No logging or storage                            |
-| Anonymity             | ✅ Possible | No login required                                |
-| Decentralization      | ❌ No       | Centralized service, but extendable (e.g. onion) |
-| Forensic Resistance   | ✅ Yes      | No disk storage, messages live in-memory only    |
-
----
-
-## WebSocket Message Format
-
-```json
-{
-  "type": "pubkey",
-  "data": {
-    "publicKey": "..."
-  }
-}
-
-{
-  "type": "message",
-  "data": {
-    "ciphertext": "...",
-    "iv": "..."
-  }
-}
-```
-
-
-
-## Comparison with Nostr, Signal, and Verba Volant
-
-### Feature Comparison
-
-| Aspect               | Nostr     | Verba Volant                                   | Signal                          |   |
-| -------------------- | --------- | ---------------------------------------------- | ------------------------------- | - |
-| Content Encryption   | ✅ Yes     | ✅ Yes                                          | ✅ Yes                           |   |
-| Forward Secrecy      | ❌ No      | ✅ Yes                                          | ✅ Yes (Double Ratchet)          |   |
-| Metadata Privacy     | ❌ No      | ✅ Yes                                          | ⚠️ Partial (requires efforts)   |   |
-| Anonymity            | ❌ Limited | ✅ Full                                         | ❌ Requires phone number         |   |
-| Decentralization     | ✅ High    | ❌ Low (but extendable)                         | ❌ No                            |   |
-| Client Compatibility | ✅ Wide    | ❌ Only dedicated clients                       | ✅ Wide                          |   |
-| Forensic Resistance  | ❌ No      | ✅ Yes                                          | ⚠️ Partial (some logs possible) |   |
-| MITM Resistance      | ❌ No      | ✅ Yes (with fingerprint verification) | ✅ Yes (with key verification)   |   |
-
-|   |
-| - |
+Verba Volant is designed for **lawful use** in scenarios where privacy is a fundamental right. It is not intended to support illegal activity or violate applicable laws. Misuse is the sole responsibility of the user.
