@@ -16,6 +16,8 @@ Unlike apps like Signal, Telegram, or WhatsApp, which store encrypted messages o
 
 ---
 
+![you shall not track](./shall-not-track-small.png)
+
 ## Goals
 
 * Ensure **complete confidentiality** in conversations
