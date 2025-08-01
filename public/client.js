@@ -30,7 +30,7 @@ let remotePublicKey = null;
 let keyExchangeCompleted = false;
 let userRole = null;
 let aesKey = null;
-let globalShowPlaintext = false;
+// Removed globalShowPlaintext - messages are now encrypted by default
 
 // Cryptographic functions
 async function generateKeyPair() {
@@ -187,7 +187,7 @@ async function decryptMessage(ciphertext, iv, aesKey) {
 joinRoomButton.addEventListener('click', joinRoom);
 leaveRoomButton.addEventListener('click', leaveRoom);
 sendButton.addEventListener('click', sendMessage);
-toggleAllButton.addEventListener('click', toggleAllMessages);
+// Toggle all button events are now handled in the toggleAllMessages function above
 messageInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -308,13 +308,33 @@ function displayMessage(sender, content, isDelivered = false, encryptedData = nu
     if (encryptedData) {
         const lockIcon = document.createElement('span');
         lockIcon.className = 'lock-icon';
-        lockIcon.textContent = globalShowPlaintext ? '🔓' : '🔒';
+        lockIcon.textContent = '🔒';
         lockIcon.style.cursor = 'pointer';
         lockIcon.style.marginLeft = '10px';
-        lockIcon.title = globalShowPlaintext ? 'Click to show encrypted' : 'Click to show decrypted';
+        lockIcon.title = 'Hold to show decrypted message';
         
-        lockIcon.addEventListener('click', () => {
-            toggleMessageDisplay(messageDiv, content, encryptedData, lockIcon);
+        // Hold to show plaintext, release to show encrypted
+        lockIcon.addEventListener('mousedown', () => {
+            showPlaintextWhilePressed(messageDiv, content, lockIcon);
+        });
+        
+        lockIcon.addEventListener('mouseup', () => {
+            showEncryptedText(messageDiv, encryptedData, lockIcon);
+        });
+        
+        lockIcon.addEventListener('mouseleave', () => {
+            showEncryptedText(messageDiv, encryptedData, lockIcon);
+        });
+        
+        // Touch events for mobile
+        lockIcon.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            showPlaintextWhilePressed(messageDiv, content, lockIcon);
+        });
+        
+        lockIcon.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            showEncryptedText(messageDiv, encryptedData, lockIcon);
         });
         
         messageHeader.appendChild(lockIcon);
@@ -325,8 +345,8 @@ function displayMessage(sender, content, isDelivered = false, encryptedData = nu
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
     
-    // Show encrypted text by default if encryption data exists
-    if (encryptedData && !globalShowPlaintext) {
+    // Always show encrypted text by default if encryption data exists
+    if (encryptedData) {
         const encryptedText = `🔒 [${Array.from(encryptedData.ciphertext).slice(0, 20).map(b => b.toString(16).padStart(2, '0')).join('')}...]`;
         contentDiv.textContent = encryptedText;
     } else {
@@ -587,45 +607,79 @@ async function displaySharedSecretInfo() {
     }
 }
 
-function toggleMessageDisplay(messageDiv, plaintextContent, encryptedData, lockIcon) {
+function showPlaintextWhilePressed(messageDiv, plaintextContent, lockIcon) {
     const contentDiv = messageDiv.querySelector('.message-content');
-    const isShowingPlaintext = lockIcon.textContent === '🔓';
-    
-    if (isShowingPlaintext) {
-        // Show encrypted version
-        const encryptedText = `🔒 [${Array.from(encryptedData.ciphertext).slice(0, 20).map(b => b.toString(16).padStart(2, '0')).join('')}...]`;
-        contentDiv.textContent = encryptedText;
-        lockIcon.textContent = '🔒';
-        lockIcon.title = 'Click to show decrypted';
-    } else {
-        // Show plaintext version
-        contentDiv.textContent = plaintextContent;
-        lockIcon.textContent = '🔓';
-        lockIcon.title = 'Click to show encrypted';
-    }
+    contentDiv.textContent = plaintextContent;
+    lockIcon.textContent = '🔓';
 }
 
+function showEncryptedText(messageDiv, encryptedData, lockIcon) {
+    const contentDiv = messageDiv.querySelector('.message-content');
+    const encryptedText = `🔒 [${Array.from(encryptedData.ciphertext).slice(0, 20).map(b => b.toString(16).padStart(2, '0')).join('')}...]`;
+    contentDiv.textContent = encryptedText;
+    lockIcon.textContent = '🔒';
+}
+
+let isGlobalUnlockPressed = false;
+
 function toggleAllMessages() {
-    globalShowPlaintext = !globalShowPlaintext;
-    toggleAllButton.textContent = globalShowPlaintext ? '🔒 Lock All' : '🔓 Unlock All';
-    
-    // Update all messages with encryption data
+    // This function is now triggered by mousedown/mouseup events
+}
+
+// Replace the toggle all button click with mousedown/mouseup events
+toggleAllButton.addEventListener('mousedown', () => {
+    isGlobalUnlockPressed = true;
+    showAllPlaintext();
+});
+
+toggleAllButton.addEventListener('mouseup', () => {
+    isGlobalUnlockPressed = false;
+    showAllEncrypted();
+});
+
+toggleAllButton.addEventListener('mouseleave', () => {
+    if (isGlobalUnlockPressed) {
+        isGlobalUnlockPressed = false;
+        showAllEncrypted();
+    }
+});
+
+// Touch events for mobile
+toggleAllButton.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    isGlobalUnlockPressed = true;
+    showAllPlaintext();
+});
+
+toggleAllButton.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    isGlobalUnlockPressed = false;
+    showAllEncrypted();
+});
+
+function showAllPlaintext() {
+    toggleAllButton.textContent = '🔓 Showing All';
     const messages = receivedMessages.querySelectorAll('.message');
     messages.forEach(messageDiv => {
         if (messageDiv.encryptedData && messageDiv.plaintextContent) {
             const contentDiv = messageDiv.querySelector('.message-content');
             const lockIcon = messageDiv.querySelector('.lock-icon');
-            
-            if (globalShowPlaintext) {
-                contentDiv.textContent = messageDiv.plaintextContent;
-                lockIcon.textContent = '🔓';
-                lockIcon.title = 'Click to show encrypted';
-            } else {
-                const encryptedText = `🔒 [${Array.from(messageDiv.encryptedData.ciphertext).slice(0, 20).map(b => b.toString(16).padStart(2, '0')).join('')}...]`;
-                contentDiv.textContent = encryptedText;
-                lockIcon.textContent = '🔒';
-                lockIcon.title = 'Click to show decrypted';
-            }
+            contentDiv.textContent = messageDiv.plaintextContent;
+            lockIcon.textContent = '🔓';
+        }
+    });
+}
+
+function showAllEncrypted() {
+    toggleAllButton.textContent = '🔒 Hold to Show All';
+    const messages = receivedMessages.querySelectorAll('.message');
+    messages.forEach(messageDiv => {
+        if (messageDiv.encryptedData && messageDiv.plaintextContent) {
+            const contentDiv = messageDiv.querySelector('.message-content');
+            const lockIcon = messageDiv.querySelector('.lock-icon');
+            const encryptedText = `🔒 [${Array.from(messageDiv.encryptedData.ciphertext).slice(0, 20).map(b => b.toString(16).padStart(2, '0')).join('')}...]`;
+            contentDiv.textContent = encryptedText;
+            lockIcon.textContent = '🔒';
         }
     });
 }
