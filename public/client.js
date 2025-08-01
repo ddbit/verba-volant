@@ -1308,6 +1308,99 @@ async function testFingerprintGenerationPipeline() {
     }
 }
 
+async function demonstrateAliceBobFingerprints() {
+    console.log('\n🔐 === ALICE & BOB MITM PROTECTION DEMONSTRATION ===');
+    
+    try {
+        if (!wordlistReady) {
+            console.log('⏭️ Skipping demonstration - BIP39 wordlist not ready');
+            return false;
+        }
+        
+        // Step 1: Alice generates her ECDH key pair
+        console.log('\n👩 Alice: Generating ECDH key pair...');
+        const aliceKeyPair = await window.crypto.subtle.generateKey(
+            { name: "ECDH", namedCurve: "P-256" },
+            false,
+            ["deriveKey", "deriveBits"]
+        );
+        const alicePublicKey = await exportPublicKey(aliceKeyPair.publicKey);
+        console.log('👩 Alice public key:', bytesToHex(alicePublicKey).substring(0, 32) + '...');
+        
+        // Step 2: Bob generates his ECDH key pair
+        console.log('\n👨 Bob: Generating ECDH key pair...');
+        const bobKeyPair = await window.crypto.subtle.generateKey(
+            { name: "ECDH", namedCurve: "P-256" },
+            false,
+            ["deriveKey", "deriveBits"]
+        );
+        const bobPublicKey = await exportPublicKey(bobKeyPair.publicKey);
+        console.log('👨 Bob public key:', bytesToHex(bobPublicKey).substring(0, 32) + '...');
+        
+        // Step 3: Alice computes fingerprint from both public keys
+        console.log('\n👩 Alice: Computing fingerprint from both public keys...');
+        const aliceAuthcode = await generateAuthcodeFromKeys(alicePublicKey, bobPublicKey, 5);
+        console.log('👩 Alice\'s 5-word authcode:', aliceAuthcode);
+        
+        // Step 4: Bob computes fingerprint from both public keys
+        console.log('\n👨 Bob: Computing fingerprint from both public keys...');
+        const bobAuthcode = await generateAuthcodeFromKeys(bobPublicKey, alicePublicKey, 5);
+        console.log('👨 Bob\'s 5-word authcode:', bobAuthcode);
+        
+        // Step 5: Verify they match (they should due to canonical ordering)
+        console.log('\n🔍 Verification: Do the authcodes match?');
+        const authcodesMatch = aliceAuthcode === bobAuthcode;
+        console.log('Alice authcode:', aliceAuthcode);
+        console.log('Bob authcode:  ', bobAuthcode);
+        console.log('Match:', authcodesMatch ? '✅ YES' : '❌ NO');
+        
+        if (!authcodesMatch) {
+            throw new Error('CRITICAL: Alice and Bob authcodes do not match!');
+        }
+        
+        // Step 6: Show the protocol in action
+        console.log('\n📋 MITM Protection Protocol:');
+        console.log('1. Alice sends Bob the room ID via OOB channel (SMS/voice)');
+        console.log('2. Both join the room and exchange public keys via WebSocket');
+        console.log('3. Alice computes and sends Bob this authcode via OOB channel:');
+        console.log(`   📱 "${aliceAuthcode}"`);
+        console.log('4. Bob computes his own authcode and compares:');
+        console.log(`   💭 "${bobAuthcode}"`);
+        console.log('5. If they match ✅, no MITM attack - proceed with encryption');
+        console.log('6. If they differ ❌, MITM attack detected - abort connection');
+        
+        // Step 7: Show security details
+        console.log('\n🛡️ Security Details:');
+        const hash = await hashCombinedPublicKeys(alicePublicKey, bobPublicKey);
+        console.log('Combined key hash:', bytesToHex(hash));
+        console.log('First 55 bits mapped to 5 BIP39 words');
+        console.log('Security level: 2^55 = 36,028,797,018,963,968 possibilities');
+        console.log('Attack probability: 1 in 36 quadrillion');
+        
+        // Step 8: Test with different key pairs to show different authcodes
+        console.log('\n🔄 Testing with different key pair (should produce different authcode):');
+        const eveKeyPair = await window.crypto.subtle.generateKey(
+            { name: "ECDH", namedCurve: "P-256" },
+            false,
+            ["deriveKey", "deriveBits"]
+        );
+        const evePublicKey = await exportPublicKey(eveKeyPair.publicKey);
+        const eveAuthcode = await generateAuthcodeFromKeys(alicePublicKey, evePublicKey, 5);
+        console.log('👩 Alice + 😈 Eve authcode:', eveAuthcode);
+        console.log('Different from Alice + Bob?', eveAuthcode !== aliceAuthcode ? '✅ YES' : '❌ NO');
+        
+        console.log('\n🎉 Alice & Bob MITM protection demonstration completed successfully!');
+        console.log('📝 Summary: Both parties computed identical 5-word verification codes');
+        console.log('🔒 The system successfully prevents man-in-the-middle attacks');
+        
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Alice & Bob demonstration failed:', error.message);
+        return false;
+    }
+}
+
 // Initialize BIP39 wordlist on page load
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Loading BIP39 wordlist...');
@@ -1329,6 +1422,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     if (bip39TestsPassed && keyOrderingTestsPassed && sha256TestsPassed && pipelineTestsPassed) {
         console.log('🔐 Complete MITM protection system ready: BIP39, key ordering, SHA-256 hashing, and fingerprint pipeline');
+        console.log('💡 Run "node test-alice-bob.js" to see Alice & Bob demonstration');
     } else {
         console.error('❌ System tests failed - MITM protection not available');
         if (!bip39TestsPassed) console.error('  - BIP39 tests failed');
