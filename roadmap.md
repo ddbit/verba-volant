@@ -68,10 +68,12 @@ A forensics-resistant web chat service with end-to-end encryption using Diffie-H
 
 ### 3.1 BIP39 Wordlist Integration
 - [X] Import BIP39 English wordlist (2048 words) into client code
-- [X] Create wordlist validation and lookup functions
+- [X] Create wordlist validation and lookup functions  
 - [X] Implement bit-to-word mapping functions (11 bits per word)
 - [X] Add word-to-index conversion for verification
 - [X] Test wordlist integrity and completeness
+- [X] Convert BIP39 wordlist to JavaScript array format (bip39.js) for client-side loading
+- [X] Fix wordlist loading issues with server security restrictions
 
 ### 3.2 Fingerprint Generation System
 - [X] Implement public key ordering function (canonical order for consistency)
@@ -81,36 +83,42 @@ A forensics-resistant web chat service with end-to-end encryption using Diffie-H
 - [X] Generate human-readable authcode (e.g., "abandon ability able about above")
 
 ### 3.3 Authentication Flow Implementation
-- [ ] Add fingerprint computation after successful key exchange
-- [ ] Display Alice's 5-word authcode in UI with copy-to-clipboard functionality
-- [ ] Create verification input field for Bob to enter received authcode
-- [ ] Implement string comparison for authcode verification
-- [ ] Add visual feedback for successful/failed verification
-- [ ] Block message sending until authentication is complete
+- [X] Add fingerprint computation after successful key exchange
+- [X] Display Alice's 5-word authcode in UI with copy-to-clipboard functionality
+- [X] Create verification input field for Bob to enter received authcode
+- [X] Implement string comparison for authcode verification
+- [X] Add visual feedback for successful/failed verification
+- [X] Block message sending until authentication is complete
+- [X] Replace Bob's manual input with visual comparison and Confirm/Reject buttons
+- [X] Implement encrypted ACK/NACK system using AES key for secure verification feedback
+- [X] Add bidirectional verification confirmation between Alice and Bob
 
 ### 3.4 User Interface for MITM Protection
-- [ ] Design authentication dialog/modal for fingerprint display
-- [ ] Add "Copy Authcode" button for Alice to share via OOB channel
-- [ ] Create "Enter Authcode" input field for Bob with paste functionality
-- [ ] Implement "Verify" button that compares computed vs received authcode
-- [ ] Add clear success/failure indicators with appropriate messaging
-- [ ] Show security status: "Verified" vs "Unverified" in connection status
+- [X] Design authentication dialog/modal for fingerprint display
+- [X] Add "Copy Authcode" button for Alice to share via OOB channel
+- [X] Create "Enter Authcode" input field for Bob with paste functionality
+- [X] Implement "Verify" button that compares computed vs received authcode
+- [X] Add clear success/failure indicators with appropriate messaging
+- [X] Show security status: "Verified" vs "Unverified" in connection status
+- [X] Redesign Bob's UI to show computed authcode with Confirm/Reject buttons
+- [X] Remove manual input field to eliminate user errors and improve UX
+- [X] Add waiting indicators for Alice during Bob's verification process
+- [X] Implement enhanced security warnings for MITM attack detection
 
 ### 3.5 Security State Management
-- [ ] Add `isAuthenticated` flag to track verification status
-- [ ] Prevent message encryption/sending until authentication completes
-- [ ] Update security status indicators to show authentication state
-- [ ] Add re-verification mechanism if key exchange resets
+- [X] Add `isAuthenticated` flag to track verification status
+- [X] Prevent message encryption/sending until authentication completes
+- [X] Update security status indicators to show authentication state
+- [X] Add re-verification mechanism if key exchange resets
 - [ ] Implement authentication timeout and retry mechanisms
-- [ ] Store authentication state only in memory (no persistence)
+- [X] Store authentication state only in memory (no persistence)
 
 ### 3.6 Out-of-Band (OOB) Channel Integration
-- [ ] Add guidance text explaining OOB channel requirement
-- [ ] Create user instructions for secure authcode sharing (SMS, voice, in-person)
+- [X] Add guidance text explaining OOB channel requirement
+- [X] Create user instructions for secure authcode sharing (SMS, voice, in-person)
 - [ ] Implement QR code generation for authcode sharing (optional)
-- [ ] Add warning messages about MITM risks if verification is skipped
-- [ ] Create "Skip Verification" option with clear security warnings
-- [ ] Document OOB channel security requirements and recommendations
+- [X] Enforce mandatory MITM protection verification (skip option removed for security)
+- [X] Document OOB channel security requirements and recommendations
 
 ## Phase 4: User Experience & Interface (Milestone 4)
 

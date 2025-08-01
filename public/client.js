@@ -32,6 +32,13 @@ let userRole = null;
 let aesKey = null;
 // Removed globalShowPlaintext - messages are now encrypted by default
 
+// MITM Protection Authentication State
+let isAuthenticated = false;
+let localPublicKeyRaw = null;
+let remotePublicKeyRaw = null;
+let computedAuthcode = null;
+let authenticationInProgress = false;
+
 // Cryptographic functions
 async function generateKeyPair() {
     try {
@@ -184,14 +191,15 @@ async function decryptMessage(ciphertext, iv, aesKey) {
 }
 
 // BIP39 Wordlist and Validation Functions
-let BIP39_WORDLIST = null;
+// Note: BIP39_WORDLIST is loaded from bip39.js
 let wordlistReady = false;
 
 async function loadBip39Wordlist() {
     try {
-        const response = await fetch('../bip39/english.txt');
-        const text = await response.text();
-        BIP39_WORDLIST = text.trim().split('\n').map(word => word.trim().toLowerCase());
+        // Check if BIP39_WORDLIST is available from bip39.js
+        if (typeof BIP39_WORDLIST === 'undefined') {
+            throw new Error('BIP39_WORDLIST not available - bip39.js not loaded');
+        }
         
         if (BIP39_WORDLIST.length !== 2048) {
             throw new Error(`Invalid wordlist length: ${BIP39_WORDLIST.length}, expected 2048`);
@@ -1401,6 +1409,348 @@ async function demonstrateAliceBobFingerprints() {
     }
 }
 
+// MITM Protection Authentication Functions
+async function computeFingerprint() {
+    /*
+     * Computes the fingerprint authcode after successful key exchange.
+     * This is called automatically when both public keys are available.
+     */
+    
+    try {
+        // Check if keys are available
+        if (!localPublicKeyRaw || !remotePublicKeyRaw) {
+            console.error('Cannot compute fingerprint: missing public keys');
+            console.log('Local key:', localPublicKeyRaw ? 'present' : 'missing');
+            console.log('Remote key:', remotePublicKeyRaw ? 'present' : 'missing');
+            return;
+        }
+        
+        // Wait for wordlist to be ready if it's not yet
+        if (!wordlistReady) {
+            console.log('⏳ Wordlist not ready, waiting...');
+            displaySystemMessage('⏳ Loading BIP39 wordlist for MITM protection...');
+            
+            // Wait up to 10 seconds for wordlist to load
+            let attempts = 0;
+            const maxAttempts = 50; // 50 * 200ms = 10 seconds
+            
+            while (!wordlistReady && attempts < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 200));
+                attempts++;
+            }
+            
+            if (!wordlistReady) {
+                console.error('Timeout waiting for BIP39 wordlist to load');
+                displaySystemMessage('❌ Failed to load BIP39 wordlist - MITM protection unavailable');
+                return;
+            }
+        }
+        
+        console.log('🔐 Computing MITM protection fingerprint...');
+        displaySystemMessage('🔐 Computing MITM protection fingerprint...');
+        authenticationInProgress = true;
+        
+        // Generate the 5-word authcode
+        computedAuthcode = await generateAuthcodeFromKeys(localPublicKeyRaw, remotePublicKeyRaw, 5);
+        
+        console.log('✅ Fingerprint computed:', computedAuthcode);
+        displaySystemMessage(`🔐 MITM protection authcode ready: "${computedAuthcode}"`);
+        
+        // Now display the authentication UI
+        displayAuthenticationUI();
+        
+    } catch (error) {
+        console.error('Failed to compute fingerprint:', error);
+        displaySystemMessage('❌ Failed to compute MITM protection fingerprint: ' + error.message);
+        authenticationInProgress = false;
+    }
+}
+
+function displayAuthenticationUI() {
+    /*
+     * Shows the MITM protection authentication interface based on user role.
+     * Alice sees her authcode to share, Bob sees input field to verify.
+     */
+    
+    if (!computedAuthcode) {
+        if (authenticationInProgress) {
+            console.log('Authentication UI requested but authcode computation in progress...');
+            displayWaitingForAuthcodeUI();
+            return;
+        } else {
+            console.error('Cannot display authentication UI: no authcode computed and not in progress');
+            return;
+        }
+    }
+    
+    // Create authentication section if it doesn't exist
+    let authSection = document.getElementById('authenticationSection');
+    if (!authSection) {
+        authSection = document.createElement('div');
+        authSection.id = 'authenticationSection';
+        authSection.className = 'authentication-section';
+        
+        // Insert after security status
+        const securityStatus = document.getElementById('securityStatus');
+        securityStatus.parentNode.insertBefore(authSection, securityStatus.nextSibling);
+    }
+    
+    // Clear previous content
+    authSection.innerHTML = '';
+    
+    if (userRole === 'Alice') {
+        displayAliceAuthcodeUI(authSection);
+    } else if (userRole === 'Bob') {
+        displayBobVerificationUI(authSection);
+    }
+    
+    authSection.style.display = 'block';
+}
+
+function displayWaitingForAuthcodeUI() {
+    /*
+     * Shows a waiting UI while the authcode is being computed.
+     */
+    
+    // Create authentication section if it doesn't exist
+    let authSection = document.getElementById('authenticationSection');
+    if (!authSection) {
+        authSection = document.createElement('div');
+        authSection.id = 'authenticationSection';
+        authSection.className = 'authentication-section';
+        
+        // Insert after security status
+        const securityStatus = document.getElementById('securityStatus');
+        securityStatus.parentNode.insertBefore(authSection, securityStatus.nextSibling);
+    }
+    
+    authSection.innerHTML = `
+        <div class="auth-card">
+            <h3>🔐 MITM Protection - Computing Fingerprint</h3>
+            <div class="auth-loading">
+                <div class="spinner"></div>
+                <p>Computing cryptographic fingerprint...</p>
+                <p><small>This may take a moment while the BIP39 wordlist loads.</small></p>
+            </div>
+        </div>
+    `;
+    
+    authSection.style.display = 'block';
+}
+
+function displayAliceAuthcodeUI(container) {
+    /*
+     * Displays Alice's 5-word authcode with copy-to-clipboard functionality.
+     */
+    
+    container.innerHTML = `
+        <div class="auth-card alice-card">
+            <h3>🔐 MITM Protection - Step 1</h3>
+            <p><strong>You are Alice.</strong> Share this 5-word code with Bob via a separate secure channel (SMS, voice call, in person):</p>
+            
+            <div class="authcode-display">
+                <code id="aliceAuthcode">${computedAuthcode}</code>
+                <button id="copyAuthcodeBtn" class="copy-btn" title="Copy to clipboard">📋 Copy</button>
+            </div>
+            
+            <div class="auth-instructions">
+                <p><strong>Instructions:</strong></p>
+                <ol>
+                    <li>Copy the 5-word code above</li>
+                    <li>Send it to Bob via SMS, voice call, or tell him in person</li>
+                    <li>Bob will compare it with his computed code and confirm or reject</li>
+                    <li>You will receive Bob's verification result automatically</li>
+                    <li>If confirmed, secure messaging will be enabled for both users</li>
+                </ol>
+                
+                <div id="waitingForBob" class="auth-feedback info" style="display: none;">
+                    ⏳ Waiting for Bob to verify the code...
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add event listeners
+    document.getElementById('copyAuthcodeBtn').addEventListener('click', copyAuthcodeToClipboard);
+}
+
+function displayBobVerificationUI(container) {
+    /*
+     * Displays Bob's verification interface with computed authcode for confirmation.
+     */
+    
+    container.innerHTML = `
+        <div class="auth-card bob-card">
+            <h3>🔐 MITM Protection - Step 2</h3>
+            <p><strong>You are Bob.</strong> Alice should send you a 5-word code via a separate secure channel.</p>
+            
+            <div class="authcode-display">
+                <code>${computedAuthcode}</code>
+            </div>
+            
+            <div class="auth-instructions">
+                <p><strong>Instructions:</strong></p>
+                <ol>
+                    <li>Wait for Alice to send you a 5-word code via SMS, voice call, or in person</li>
+                    <li>Compare it with your computed code shown above</li>
+                    <li>If they match exactly, click "Confirm" to proceed with secure messaging</li>
+                    <li>If they differ, click "Reject" - there may be a MITM attack</li>
+                </ol>
+            </div>
+            
+            <div class="verification-buttons">
+                <button id="confirmAuthcodeBtn" class="verify-btn">✅ Confirm - Codes Match</button>
+                <button id="rejectAuthcodeBtn" class="reject-btn">❌ Reject - Codes Don't Match</button>
+            </div>
+        </div>
+    `;
+    
+    // Add event listeners
+    document.getElementById('confirmAuthcodeBtn').addEventListener('click', confirmAuthcode);
+    document.getElementById('rejectAuthcodeBtn').addEventListener('click', rejectAuthcode);
+}
+
+async function copyAuthcodeToClipboard() {
+    /*
+     * Copies Alice's authcode to clipboard.
+     */
+    
+    try {
+        await navigator.clipboard.writeText(computedAuthcode);
+        
+        // Visual feedback
+        const btn = document.getElementById('copyAuthcodeBtn');
+        const originalText = btn.textContent;
+        btn.textContent = '✅ Copied!';
+        setTimeout(() => {
+            btn.textContent = originalText;
+        }, 2000);
+        
+        displaySystemMessage('📋 Authcode copied to clipboard');
+        
+        // Show waiting message
+        const waitingDiv = document.getElementById('waitingForBob');
+        if (waitingDiv) {
+            waitingDiv.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Failed to copy to clipboard:', error);
+        displaySystemMessage('❌ Failed to copy to clipboard');
+        
+        // Fallback: select the text
+        const authcodeElement = document.getElementById('aliceAuthcode');
+        if (authcodeElement) {
+            const range = document.createRange();
+            range.selectNode(authcodeElement);
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+        }
+    }
+}
+
+async function confirmAuthcode() {
+    /*
+     * Bob confirms that the codes match (authentication successful).
+     */
+    
+    try {
+        displayAuthFeedback('Confirming verification...', 'info');
+        
+        // Authentication successful
+        isAuthenticated = true;
+        authenticationInProgress = false;
+        
+        displayAuthFeedback('✅ Verification successful! No MITM attack detected.', 'success');
+        displaySystemMessage('🔒 MITM protection verified - secure messaging enabled');
+        
+        // Send encrypted ACK message to Alice to confirm verification
+        if (ws && ws.readyState === WebSocket.OPEN && aesKey) {
+            await sendEncryptedMessage('ACK - MITM protection verified by Bob');
+        }
+        
+        // Hide authentication UI and enable messaging
+        setTimeout(() => {
+            hideAuthenticationUI();
+            enableSecureMessaging();
+            updateSecurityStatus('authenticated', 'MITM protection verified - secure messaging ready');
+        }, 2000);
+        
+    } catch (error) {
+        console.error('Confirmation error:', error);
+        displayAuthFeedback('❌ Confirmation error: ' + error.message, 'error');
+    }
+}
+
+async function rejectAuthcode() {
+    /*
+     * Bob rejects the verification (codes don't match - possible MITM attack).
+     */
+    
+    try {
+        displayAuthFeedback('❌ Verification rejected! Codes do not match. Possible MITM attack!', 'error');
+        displaySystemMessage('⚠️ MITM protection failed - possible attack detected!');
+        
+        // Send encrypted NACK message to Alice to report verification failure
+        if (ws && ws.readyState === WebSocket.OPEN && aesKey) {
+            await sendEncryptedMessage('NACK - MITM protection FAILED - codes do not match');
+        }
+        
+        // Show warning about potential MITM attack
+        setTimeout(() => {
+            alert(
+                'SECURITY WARNING: The verification codes do not match!\n\n' +
+                'This could indicate a man-in-the-middle attack where someone is intercepting your communications.\n\n' +
+                'DO NOT proceed with messaging. Check your connection and try again with a secure channel.'
+            );
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Rejection error:', error);
+        displayAuthFeedback('❌ Rejection error: ' + error.message, 'error');
+    }
+}
+
+function displayAuthFeedback(message, type) {
+    /*
+     * Shows feedback messages in the authentication UI.
+     */
+    
+    let feedbackElement = document.getElementById('authFeedback');
+    if (!feedbackElement) {
+        feedbackElement = document.createElement('div');
+        feedbackElement.id = 'authFeedback';
+        feedbackElement.className = 'auth-feedback';
+        
+        const authSection = document.getElementById('authenticationSection');
+        if (authSection) {
+            authSection.appendChild(feedbackElement);
+        }
+    }
+    
+    feedbackElement.className = `auth-feedback ${type}`;
+    feedbackElement.textContent = message;
+    feedbackElement.style.display = 'block';
+    
+    // Auto-hide info messages
+    if (type === 'info') {
+        setTimeout(() => {
+            feedbackElement.style.display = 'none';
+        }, 3000);
+    }
+}
+
+
+function hideAuthenticationUI() {
+    /*
+     * Hides the authentication UI after verification is complete.
+     */
+    
+    const authSection = document.getElementById('authenticationSection');
+    if (authSection) {
+        authSection.style.display = 'none';
+    }
+}
+
 // Initialize BIP39 wordlist on page load
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Loading BIP39 wordlist...');
@@ -1508,6 +1858,12 @@ async function sendMessage() {
     const message = messageInput.value.trim();
     if (!message || !isConnected) return;
     
+    // Block messaging until MITM protection is complete
+    if (!isAuthenticated) {
+        alert('Please complete MITM protection verification before sending messages.');
+        return;
+    }
+    
     console.log('Sending message:', message);
     
     if (keyExchangeCompleted && aesKey) {
@@ -1539,6 +1895,38 @@ async function sendMessage() {
         }
     } else {
         alert('Encryption not ready. Please wait for key exchange to complete.');
+    }
+}
+
+async function sendEncryptedMessage(messageText) {
+    /*
+     * Sends an encrypted message with the specified text (used for ACK/NACK).
+     */
+    
+    if (!keyExchangeCompleted || !aesKey || !ws || ws.readyState !== WebSocket.OPEN) {
+        throw new Error('Cannot send encrypted message - encryption not ready or connection closed');
+    }
+    
+    try {
+        // Encrypt the message
+        const encrypted = await encryptMessage(messageText, aesKey);
+        
+        // Send encrypted message to server
+        const encryptedMessageData = {
+            type: 'encrypted_message',
+            data: {
+                ciphertext: Array.from(encrypted.ciphertext),
+                iv: Array.from(encrypted.iv),
+                sender: userRole
+            }
+        };
+        
+        ws.send(JSON.stringify(encryptedMessageData));
+        console.log('Encrypted message sent:', messageText);
+        
+    } catch (error) {
+        console.error('Failed to send encrypted message:', error);
+        throw error;
     }
 }
 
@@ -1792,10 +2180,25 @@ async function handlePublicKeyReceived(data) {
         keyExchangeCompleted = true;
         
         console.log('Key exchange completed successfully');
+        
+        // Store raw public key data for MITM protection
+        remotePublicKeyRaw = publicKeyData;
+        localPublicKeyRaw = await exportPublicKey(keyPair.publicKey);
+        
+        // Compute fingerprint for MITM protection
+        await computeFingerprint();
+        
         updateSecurityStatus('secure', 'Ready for encrypted messaging - AES-GCM active');
         displaySystemMessage('🔒 Ready for secure messaging - end-to-end encryption active');
         displaySharedSecretInfo();
-        enableSecureMessaging();
+        
+        // Don't enable secure messaging until authentication is complete
+        if (isAuthenticated) {
+            enableSecureMessaging();
+        } else {
+            updateSecurityStatus('key-exchange', 'Waiting for MITM protection verification...');
+            // displayAuthenticationUI will be called automatically after computeFingerprint completes
+        }
     } catch (error) {
         console.error('Failed to complete key exchange at step:', error.message);
         console.error('Full error:', error);
@@ -1837,19 +2240,24 @@ function leaveRoom() {
     location.reload();
 }
 
-async function displaySharedSecretInfo() {
+function displaySharedSecretInfo() {
     try {
-        const secretBytes = await window.crypto.subtle.exportKey("raw", sharedSecret);
-        const secretArray = new Uint8Array(secretBytes);
-        const secretHex = Array.from(secretArray)
-            .map(byte => byte.toString(16).padStart(2, '0'))
-            .join('');
+        // Note: sharedSecret and aesKey are non-extractable for security
+        // We can't export their values, but we can show that they were derived successfully
         
-        const shortFingerprint = secretHex.substring(0, 16);
-        displaySystemMessage(`🔑 AES key derived with HKDF/SHA-256 (${shortFingerprint}...)`);
+        if (computedAuthcode) {
+            // Use the MITM protection authcode as a fingerprint since it's derived from the same public keys
+            displaySystemMessage(`🔑 AES key derived - Verification code: "${computedAuthcode}"`);
+            console.log('AES key derived successfully');
+            console.log('MITM protection authcode available:', computedAuthcode);
+        } else {
+            // Fallback message when authcode is not yet computed
+            displaySystemMessage('🔑 AES key derived with HKDF/SHA-256 - ready for encryption');
+            console.log('AES key derived successfully (keys are non-extractable for security)');
+        }
         
-        console.log('Shared secret fingerprint:', shortFingerprint);
-        console.log('AES key ready for encryption/decryption');
+        console.log('Encryption ready: AES-GCM with 256-bit key');
+        console.log('Forward secrecy: Keys are ephemeral and non-persistent');
     } catch (error) {
         console.error('Failed to display shared secret info:', error);
         displaySystemMessage('🔑 AES key derived successfully');
@@ -1961,7 +2369,47 @@ async function handleEncryptedMessage(data) {
         
         const decryptedMessage = await decryptMessage(ciphertext, iv, aesKey);
         
-        // Display the message with encryption toggle capability
+        // Check if this is an ACK/NACK message for MITM protection verification
+        if (decryptedMessage.startsWith('ACK - MITM protection verified')) {
+            // Bob confirmed verification - Alice receives this
+            if (userRole === 'Alice' && authenticationInProgress) {
+                isAuthenticated = true;
+                authenticationInProgress = false;
+                
+                displaySystemMessage('✅ Bob confirmed verification - MITM protection complete');
+                displayAuthFeedback('✅ Bob confirmed the codes match! Secure messaging enabled.', 'success');
+                
+                // Hide authentication UI and enable messaging for Alice
+                setTimeout(() => {
+                    hideAuthenticationUI();
+                    enableSecureMessaging();
+                    updateSecurityStatus('authenticated', 'MITM protection verified - secure messaging ready');
+                }, 2000);
+                
+                console.log('Alice received ACK from Bob - verification complete');
+                return; // Don't display as regular message
+            }
+        } else if (decryptedMessage.startsWith('NACK - MITM protection FAILED')) {
+            // Bob rejected verification - Alice receives this
+            if (userRole === 'Alice' && authenticationInProgress) {
+                displaySystemMessage('❌ Bob rejected verification - possible MITM attack detected');
+                displayAuthFeedback('❌ Bob reports codes do not match! Possible MITM attack!', 'error');
+                
+                // Show warning to Alice
+                setTimeout(() => {
+                    alert(
+                        'SECURITY WARNING: Bob reports the verification codes do not match!\n\n' +
+                        'This indicates a possible man-in-the-middle attack.\n\n' +
+                        'DO NOT proceed with messaging. Check your connection and try again.'
+                    );
+                }, 1000);
+                
+                console.log('Alice received NACK from Bob - verification failed');
+                return; // Don't display as regular message
+            }
+        }
+        
+        // Display regular messages with encryption toggle capability
         const senderName = sender === userRole ? 'You' : sender;
         const encryptedData = { ciphertext, iv };
         displayMessage(senderName, decryptedMessage, true, encryptedData);
@@ -1972,3 +2420,4 @@ async function handleEncryptedMessage(data) {
         displayMessage('System', '❌ Failed to decrypt message', false);
     }
 }
+
