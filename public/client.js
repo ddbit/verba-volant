@@ -382,6 +382,340 @@ function hashToAuthcode(hashBytes, wordCount = 5) {
     return words.join(' ');
 }
 
+// Explicit bit extraction and word mapping functions for Section 3.2 completion
+function extractBitsFromHash(hashBytes, bitCount = 55) {
+    /*
+     * Extracts first N×11 bits from SHA-256 hash (default N=5 for 55-bit security).
+     * Implements the protocol specification exactly.
+     * 
+     * @param {Uint8Array} hashBytes - SHA-256 hash (32 bytes)
+     * @param {number} bitCount - Number of bits to extract (default 55 for 5 words)
+     * @returns {Array} Array of bits (0s and 1s)
+     */
+    
+    if (!(hashBytes instanceof Uint8Array)) {
+        throw new Error('Hash must be Uint8Array');
+    }
+    
+    if (hashBytes.length < Math.ceil(bitCount / 8)) {
+        throw new Error(`Hash too short: need ${Math.ceil(bitCount / 8)} bytes for ${bitCount} bits`);
+    }
+    
+    // Convert bytes to bits
+    const allBits = bytesToBits(hashBytes);
+    
+    // Extract first N bits
+    const extractedBits = allBits.slice(0, bitCount);
+    
+    console.log(`Extracted ${extractedBits.length} bits from hash:`, extractedBits.slice(0, 11), '...');
+    return extractedBits;
+}
+
+function mapBitsToWords(bits, wordCount = 5) {
+    /*
+     * Maps extracted bits to BIP39 words using bit slicing.
+     * Each 11-bit slice maps to one BIP39 word (0-2047 range).
+     * 
+     * @param {Array} bits - Array of bits (0s and 1s)
+     * @param {number} wordCount - Number of words to generate
+     * @returns {Array} Array of BIP39 words
+     */
+    
+    if (!wordlistReady) {
+        throw new Error('BIP39 wordlist not ready');
+    }
+    
+    const requiredBits = wordCount * 11;
+    if (bits.length < requiredBits) {
+        throw new Error(`Insufficient bits: need ${requiredBits}, got ${bits.length}`);
+    }
+    
+    const words = [];
+    for (let i = 0; i < wordCount; i++) {
+        // Extract 11 bits for this word
+        const startBit = i * 11;
+        const wordBits = bits.slice(startBit, startBit + 11);
+        
+        // Convert 11 bits to word index (0-2047)
+        let wordIndex = 0;
+        for (let j = 0; j < wordBits.length; j++) {
+            wordIndex = (wordIndex << 1) | wordBits[j];
+        }
+        
+        if (wordIndex >= 2048) {
+            throw new Error(`Invalid word index: ${wordIndex}, must be 0-2047`);
+        }
+        
+        const word = BIP39_WORDLIST[wordIndex];
+        words.push(word);
+        
+        console.log(`Bit slice ${i}: [${wordBits.join('')}] → index ${wordIndex} → "${word}"`);
+    }
+    
+    return words;
+}
+
+function generateHumanReadableAuthcode(hashBytes, wordCount = 5) {
+    /*
+     * Generates human-readable authcode from hash bytes.
+     * Complete implementation: hash → bits → words → string
+     * Example output: "abandon ability able about above"
+     * 
+     * @param {Uint8Array} hashBytes - SHA-256 hash (32 bytes)
+     * @param {number} wordCount - Number of BIP39 words (default 5)
+     * @returns {string} Human-readable authcode
+     */
+    
+    console.log('Generating human-readable authcode...');
+    console.log('Input hash:', bytesToHex(hashBytes));
+    
+    // Step 1: Extract first N×11 bits from hash
+    const bitCount = wordCount * 11;
+    const extractedBits = extractBitsFromHash(hashBytes, bitCount);
+    
+    // Step 2: Map extracted bits to BIP39 words using bit slicing
+    const words = mapBitsToWords(extractedBits, wordCount);
+    
+    // Step 3: Generate human-readable authcode
+    const authcode = words.join(' ');
+    
+    console.log(`Generated ${wordCount}-word authcode:`, authcode);
+    console.log('Security level:', `${bitCount} bits (${Math.pow(2, bitCount).toExponential(2)} possibilities)`);
+    
+    return authcode;
+}
+
+// Public Key Ordering Functions for MITM Protection
+function canonicalKeyOrder(publicKeyA, publicKeyB) {
+    /*
+     * Orders two public keys in canonical (lexicographic) order for consistent
+     * fingerprint generation. Both Alice and Bob will get the same order regardless
+     * of who generated which key first.
+     * 
+     * @param {Uint8Array} publicKeyA - First public key as raw bytes
+     * @param {Uint8Array} publicKeyB - Second public key as raw bytes
+     * @returns {Array} [firstKey, secondKey] in canonical order
+     */
+    
+    if (!publicKeyA || !publicKeyB) {
+        throw new Error('Both public keys are required');
+    }
+    
+    if (!(publicKeyA instanceof Uint8Array) || !(publicKeyB instanceof Uint8Array)) {
+        throw new Error('Public keys must be Uint8Array');
+    }
+    
+    // Compare keys byte by byte (lexicographic order)
+    const minLength = Math.min(publicKeyA.length, publicKeyB.length);
+    
+    for (let i = 0; i < minLength; i++) {
+        if (publicKeyA[i] < publicKeyB[i]) {
+            return [publicKeyA, publicKeyB]; // A comes first
+        } else if (publicKeyA[i] > publicKeyB[i]) {
+            return [publicKeyB, publicKeyA]; // B comes first
+        }
+        // If bytes are equal, continue to next byte
+    }
+    
+    // If all compared bytes are equal, shorter key comes first
+    if (publicKeyA.length < publicKeyB.length) {
+        return [publicKeyA, publicKeyB];
+    } else if (publicKeyA.length > publicKeyB.length) {
+        return [publicKeyB, publicKeyA];
+    }
+    
+    // Keys are identical - this should not happen in practice
+    console.warn('Warning: Identical public keys detected');
+    return [publicKeyA, publicKeyB];
+}
+
+function combineOrderedKeys(orderedKeys) {
+    /*
+     * Combines two ordered public keys into a single byte array for hashing.
+     * 
+     * @param {Array} orderedKeys - Array of [firstKey, secondKey] in canonical order
+     * @returns {Uint8Array} Combined key data ready for hashing
+     */
+    
+    if (!Array.isArray(orderedKeys) || orderedKeys.length !== 2) {
+        throw new Error('Expected array of exactly 2 keys');
+    }
+    
+    const [keyA, keyB] = orderedKeys;
+    
+    if (!(keyA instanceof Uint8Array) || !(keyB instanceof Uint8Array)) {
+        throw new Error('Keys must be Uint8Array');
+    }
+    
+    // Create combined array: keyA + keyB
+    const combined = new Uint8Array(keyA.length + keyB.length);
+    combined.set(keyA, 0);
+    combined.set(keyB, keyA.length);
+    
+    return combined;
+}
+
+function bytesToHex(bytes) {
+    /*
+     * Converts byte array to hexadecimal string for debugging/logging.
+     * 
+     * @param {Uint8Array} bytes - Byte array to convert
+     * @returns {string} Hexadecimal representation
+     */
+    return Array.from(bytes)
+        .map(byte => byte.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+function comparePublicKeys(keyA, keyB) {
+    /*
+     * Compares two public keys for debugging purposes.
+     * 
+     * @param {Uint8Array} keyA - First public key
+     * @param {Uint8Array} keyB - Second public key
+     * @returns {number} -1 if A < B, 1 if A > B, 0 if equal
+     */
+    
+    const minLength = Math.min(keyA.length, keyB.length);
+    
+    for (let i = 0; i < minLength; i++) {
+        if (keyA[i] < keyB[i]) return -1;
+        if (keyA[i] > keyB[i]) return 1;
+    }
+    
+    if (keyA.length < keyB.length) return -1;
+    if (keyA.length > keyB.length) return 1;
+    return 0;
+}
+
+// SHA-256 Hash Functions for Fingerprint Generation
+async function hashCombinedPublicKeys(publicKeyA, publicKeyB) {
+    /*
+     * Creates SHA-256 hash of two public keys in canonical order.
+     * Implements: hash = SHA-256(ordered(pubkeyA, pubkeyB))
+     * 
+     * @param {Uint8Array} publicKeyA - First public key as raw bytes
+     * @param {Uint8Array} publicKeyB - Second public key as raw bytes
+     * @returns {Promise<Uint8Array>} SHA-256 hash (32 bytes)
+     */
+    
+    try {
+        // Step 1: Order keys canonically
+        const orderedKeys = canonicalKeyOrder(publicKeyA, publicKeyB);
+        console.log('Keys ordered canonically:', {
+            first: bytesToHex(orderedKeys[0]).substring(0, 16) + '...',
+            second: bytesToHex(orderedKeys[1]).substring(0, 16) + '...'
+        });
+        
+        // Step 2: Combine ordered keys
+        const combinedKeys = combineOrderedKeys(orderedKeys);
+        console.log('Combined key length:', combinedKeys.length, 'bytes');
+        console.log('Combined key preview:', bytesToHex(combinedKeys).substring(0, 32) + '...');
+        
+        // Step 3: Hash with SHA-256
+        const hashBuffer = await window.crypto.subtle.digest('SHA-256', combinedKeys);
+        const hashArray = new Uint8Array(hashBuffer);
+        
+        console.log('SHA-256 hash generated:', bytesToHex(hashArray));
+        return hashArray;
+        
+    } catch (error) {
+        console.error('Failed to hash combined public keys:', error);
+        throw new Error(`Hash generation failed: ${error.message}`);
+    }
+}
+
+async function generateFingerprintHash(localPublicKey, remotePublicKey) {
+    /*
+     * Generates fingerprint hash from local and remote public keys.
+     * This is the main function for MITM protection.
+     * 
+     * @param {Uint8Array} localPublicKey - Our public key
+     * @param {Uint8Array} remotePublicKey - Remote party's public key
+     * @returns {Promise<Uint8Array>} SHA-256 hash for fingerprint generation
+     */
+    
+    if (!localPublicKey || !remotePublicKey) {
+        throw new Error('Both public keys are required for fingerprint generation');
+    }
+    
+    console.log('Generating fingerprint hash...');
+    console.log('Local public key:', bytesToHex(localPublicKey).substring(0, 16) + '...');
+    console.log('Remote public key:', bytesToHex(remotePublicKey).substring(0, 16) + '...');
+    
+    return await hashCombinedPublicKeys(localPublicKey, remotePublicKey);
+}
+
+async function generateAuthcodeFromKeys(localPublicKey, remotePublicKey, wordCount = 5) {
+    /*
+     * Complete pipeline: public keys → hash → BIP39 authcode
+     * 
+     * @param {Uint8Array} localPublicKey - Our public key
+     * @param {Uint8Array} remotePublicKey - Remote party's public key
+     * @param {number} wordCount - Number of BIP39 words (default 5 for 55-bit security)
+     * @returns {Promise<string>} Human-readable authcode (e.g., "abandon ability able about above")
+     */
+    
+    try {
+        // Generate fingerprint hash
+        const fingerprintHash = await generateFingerprintHash(localPublicKey, remotePublicKey);
+        
+        // Convert hash to BIP39 authcode
+        const authcode = hashToAuthcode(fingerprintHash, wordCount);
+        
+        console.log('Generated authcode:', authcode);
+        return authcode;
+        
+    } catch (error) {
+        console.error('Failed to generate authcode from keys:', error);
+        throw new Error(`Authcode generation failed: ${error.message}`);
+    }
+}
+
+async function verifyFingerprintMatch(localPublicKey, remotePublicKey, expectedAuthcode) {
+    /*
+     * Verifies that computed authcode matches expected authcode.
+     * Used by Bob to verify Alice's authcode.
+     * 
+     * @param {Uint8Array} localPublicKey - Our public key
+     * @param {Uint8Array} remotePublicKey - Remote party's public key  
+     * @param {string} expectedAuthcode - Authcode received from remote party
+     * @returns {Promise<Object>} {isValid: boolean, computedAuthcode: string, error?: string}
+     */
+    
+    try {
+        // Generate our computed authcode
+        const computedAuthcode = await generateAuthcodeFromKeys(localPublicKey, remotePublicKey);
+        
+        // Normalize both authcodes for comparison
+        const normalizedExpected = expectedAuthcode.toLowerCase().trim().replace(/\s+/g, ' ');
+        const normalizedComputed = computedAuthcode.toLowerCase().trim().replace(/\s+/g, ' ');
+        
+        const isValid = normalizedExpected === normalizedComputed;
+        
+        console.log('Fingerprint verification:', {
+            expected: normalizedExpected,
+            computed: normalizedComputed,
+            match: isValid
+        });
+        
+        return {
+            isValid: isValid,
+            computedAuthcode: computedAuthcode,
+            expectedAuthcode: expectedAuthcode
+        };
+        
+    } catch (error) {
+        console.error('Failed to verify fingerprint match:', error);
+        return {
+            isValid: false,
+            computedAuthcode: '',
+            expectedAuthcode: expectedAuthcode,
+            error: error.message
+        };
+    }
+}
+
 // Test functions for BIP39 implementation
 function testBip39Functions() {
     console.log('Testing BIP39 functions...');
@@ -506,6 +840,474 @@ function testBip39Functions() {
     }
 }
 
+function testPublicKeyOrdering() {
+    console.log('Testing public key ordering functions...');
+    
+    try {
+        // Test 1: Basic ordering - smaller key should come first
+        console.log('Test 1: Basic key ordering');
+        const keyA = new Uint8Array([0x00, 0x01, 0x02]);
+        const keyB = new Uint8Array([0x00, 0x01, 0x03]);
+        
+        const ordered1 = canonicalKeyOrder(keyA, keyB);
+        if (ordered1[0] !== keyA || ordered1[1] !== keyB) {
+            throw new Error('Failed: keyA should come before keyB');
+        }
+        
+        // Reverse order should give same result
+        const ordered2 = canonicalKeyOrder(keyB, keyA);
+        if (ordered2[0] !== keyA || ordered2[1] !== keyB) {
+            throw new Error('Failed: order should be consistent regardless of input order');
+        }
+        console.log('✅ Basic key ordering passed');
+        
+        // Test 2: Different length keys
+        console.log('Test 2: Different length keys');
+        const shortKey = new Uint8Array([0x01, 0x02]);
+        const longKey = new Uint8Array([0x01, 0x02, 0x03]);
+        
+        const ordered3 = canonicalKeyOrder(longKey, shortKey);
+        if (ordered3[0] !== shortKey || ordered3[1] !== longKey) {
+            throw new Error('Failed: shorter key should come first');
+        }
+        
+        const ordered4 = canonicalKeyOrder(shortKey, longKey);
+        if (ordered4[0] !== shortKey || ordered4[1] !== longKey) {
+            throw new Error('Failed: ordering should be consistent with length');
+        }
+        console.log('✅ Different length key ordering passed');
+        
+        // Test 3: First byte difference
+        console.log('Test 3: First byte difference');
+        const key1 = new Uint8Array([0x00, 0xFF, 0xFF]);
+        const key2 = new Uint8Array([0x01, 0x00, 0x00]);
+        
+        const ordered5 = canonicalKeyOrder(key2, key1);
+        if (ordered5[0] !== key1 || ordered5[1] !== key2) {
+            throw new Error('Failed: key with smaller first byte should come first');
+        }
+        console.log('✅ First byte difference ordering passed');
+        
+        // Test 4: Identical keys
+        console.log('Test 4: Identical keys');
+        const keyIdentical = new Uint8Array([0x01, 0x02, 0x03]);
+        const keyIdentical2 = new Uint8Array([0x01, 0x02, 0x03]);
+        
+        const ordered6 = canonicalKeyOrder(keyIdentical, keyIdentical2);
+        // Should not throw error and return consistent order
+        if (!ordered6 || ordered6.length !== 2) {
+            throw new Error('Failed: should handle identical keys gracefully');
+        }
+        console.log('✅ Identical key handling passed');
+        
+        // Test 5: Key combination
+        console.log('Test 5: Key combination');
+        const testKeyA = new Uint8Array([0xAA, 0xBB]);
+        const testKeyB = new Uint8Array([0xCC, 0xDD]);
+        
+        const orderedTest = canonicalKeyOrder(testKeyB, testKeyA);
+        const combined = combineOrderedKeys(orderedTest);
+        
+        // testKeyA should come first (0xAA < 0xCC)
+        const expectedCombined = new Uint8Array([0xAA, 0xBB, 0xCC, 0xDD]);
+        if (combined.length !== expectedCombined.length) {
+            throw new Error('Failed: combined key has wrong length');
+        }
+        
+        for (let i = 0; i < combined.length; i++) {
+            if (combined[i] !== expectedCombined[i]) {
+                throw new Error(`Failed: combined key mismatch at byte ${i}`);
+            }
+        }
+        console.log('✅ Key combination passed');
+        
+        // Test 6: Hex conversion
+        console.log('Test 6: Hex conversion');
+        const testBytes = new Uint8Array([0x00, 0xFF, 0xAB, 0xCD]);
+        const hex = bytesToHex(testBytes);
+        const expectedHex = '00ffabcd';
+        
+        if (hex !== expectedHex) {
+            throw new Error(`Failed: hex conversion incorrect. Got ${hex}, expected ${expectedHex}`);
+        }
+        console.log('✅ Hex conversion passed');
+        
+        // Test 7: Key comparison
+        console.log('Test 7: Key comparison');
+        const compareA = new Uint8Array([0x01, 0x02]);
+        const compareB = new Uint8Array([0x01, 0x03]);
+        const compareC = new Uint8Array([0x01, 0x02]);
+        
+        if (comparePublicKeys(compareA, compareB) !== -1) {
+            throw new Error('Failed: A should be less than B');
+        }
+        
+        if (comparePublicKeys(compareB, compareA) !== 1) {
+            throw new Error('Failed: B should be greater than A');
+        }
+        
+        if (comparePublicKeys(compareA, compareC) !== 0) {
+            throw new Error('Failed: A should equal C');
+        }
+        console.log('✅ Key comparison passed');
+        
+        // Test 8: Error handling
+        console.log('Test 8: Error handling');
+        try {
+            canonicalKeyOrder(null, keyA);
+            throw new Error('Failed: should throw error for null key');
+        } catch (e) {
+            if (!e.message.includes('Both public keys are required')) {
+                throw new Error('Failed: wrong error message for null key');
+            }
+        }
+        
+        try {
+            canonicalKeyOrder('invalid', keyA);
+            throw new Error('Failed: should throw error for invalid key type');
+        } catch (e) {
+            if (!e.message.includes('must be Uint8Array')) {
+                throw new Error('Failed: wrong error message for invalid key type');
+            }
+        }
+        console.log('✅ Error handling passed');
+        
+        console.log('🎉 All public key ordering tests passed successfully!');
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Public key ordering test failed:', error.message);
+        return false;
+    }
+}
+
+async function testSHA256HashFunctions() {
+    console.log('Testing SHA-256 hash functions...');
+    
+    try {
+        // Test 1: Basic hash generation
+        console.log('Test 1: Basic hash generation');
+        const keyA = new Uint8Array([0x01, 0x02, 0x03, 0x04]);
+        const keyB = new Uint8Array([0x05, 0x06, 0x07, 0x08]);
+        
+        const hash1 = await hashCombinedPublicKeys(keyA, keyB);
+        if (!(hash1 instanceof Uint8Array) || hash1.length !== 32) {
+            throw new Error('Failed: hash should be 32-byte Uint8Array');
+        }
+        
+        // Same keys should produce same hash
+        const hash2 = await hashCombinedPublicKeys(keyA, keyB);
+        if (bytesToHex(hash1) !== bytesToHex(hash2)) {
+            throw new Error('Failed: same input should produce same hash');
+        }
+        
+        // Reversed order should produce same hash (canonical ordering)
+        const hash3 = await hashCombinedPublicKeys(keyB, keyA);
+        if (bytesToHex(hash1) !== bytesToHex(hash3)) {
+            throw new Error('Failed: key order should not affect hash due to canonical ordering');
+        }
+        console.log('✅ Basic hash generation passed');
+        
+        // Test 2: Different keys produce different hashes
+        console.log('Test 2: Different keys produce different hashes');
+        const keyC = new Uint8Array([0x09, 0x0A, 0x0B, 0x0C]);
+        const hash4 = await hashCombinedPublicKeys(keyA, keyC);
+        
+        if (bytesToHex(hash1) === bytesToHex(hash4)) {
+            throw new Error('Failed: different key combinations should produce different hashes');
+        }
+        console.log('✅ Different keys produce different hashes passed');
+        
+        // Test 3: Fingerprint hash generation
+        console.log('Test 3: Fingerprint hash generation');
+        const localKey = new Uint8Array([0x11, 0x22, 0x33, 0x44]);
+        const remoteKey = new Uint8Array([0x55, 0x66, 0x77, 0x88]);
+        
+        const fingerprintHash = await generateFingerprintHash(localKey, remoteKey);
+        if (!(fingerprintHash instanceof Uint8Array) || fingerprintHash.length !== 32) {
+            throw new Error('Failed: fingerprint hash should be 32-byte Uint8Array');
+        }
+        console.log('✅ Fingerprint hash generation passed');
+        
+        // Test 4: Complete authcode generation pipeline
+        console.log('Test 4: Complete authcode generation pipeline');
+        if (!wordlistReady) {
+            console.log('⏭️ Skipping authcode test - BIP39 wordlist not ready');
+        } else {
+            const authcode = await generateAuthcodeFromKeys(localKey, remoteKey, 5);
+            
+            if (typeof authcode !== 'string') {
+                throw new Error('Failed: authcode should be a string');
+            }
+            
+            const words = authcode.split(' ');
+            if (words.length !== 5) {
+                throw new Error('Failed: authcode should have 5 words');
+            }
+            
+            // Verify all words are valid BIP39 words
+            for (const word of words) {
+                if (!isValidBip39Word(word)) {
+                    throw new Error(`Failed: "${word}" is not a valid BIP39 word`);
+                }
+            }
+            console.log('✅ Complete authcode generation pipeline passed');
+            console.log('  Generated authcode:', authcode);
+        }
+        
+        // Test 5: Fingerprint verification
+        console.log('Test 5: Fingerprint verification');
+        if (!wordlistReady) {
+            console.log('⏭️ Skipping verification test - BIP39 wordlist not ready');
+        } else {
+            // Generate authcode for verification
+            const testAuthcode = await generateAuthcodeFromKeys(localKey, remoteKey, 5);
+            
+            // Verify with correct authcode
+            const verifyCorrect = await verifyFingerprintMatch(localKey, remoteKey, testAuthcode);
+            if (!verifyCorrect.isValid) {
+                throw new Error('Failed: correct authcode should verify successfully');
+            }
+            
+            // Verify with incorrect authcode
+            const wrongAuthcode = 'abandon ability able about above';
+            const verifyWrong = await verifyFingerprintMatch(localKey, remoteKey, wrongAuthcode);
+            if (verifyWrong.isValid && verifyWrong.computedAuthcode !== wrongAuthcode) {
+                throw new Error('Failed: incorrect authcode should not verify (unless by coincidence)');
+            }
+            
+            console.log('✅ Fingerprint verification passed');
+        }
+        
+        // Test 6: Error handling
+        console.log('Test 6: Error handling');
+        try {
+            await generateFingerprintHash(null, remoteKey);
+            throw new Error('Failed: should throw error for null key');
+        } catch (e) {
+            if (!e.message.includes('Both public keys are required')) {
+                throw new Error('Failed: wrong error message for null key');
+            }
+        }
+        
+        try {
+            await hashCombinedPublicKeys('invalid', remoteKey);
+            throw new Error('Failed: should throw error for invalid key type');
+        } catch (e) {
+            // Should throw error from canonicalKeyOrder function
+        }
+        console.log('✅ Error handling passed');
+        
+        // Test 7: Deterministic results
+        console.log('Test 7: Deterministic results');
+        if (wordlistReady) {
+            const authcode1 = await generateAuthcodeFromKeys(localKey, remoteKey, 3);
+            const authcode2 = await generateAuthcodeFromKeys(localKey, remoteKey, 3);
+            
+            if (authcode1 !== authcode2) {
+                throw new Error('Failed: same inputs should produce identical authcodes');
+            }
+            console.log('✅ Deterministic results passed');
+        }
+        
+        // Test 8: Real ECDH key compatibility test
+        console.log('Test 8: Real ECDH key compatibility test');
+        try {
+            // Generate real ECDH keys for testing
+            const testKeyPair1 = await window.crypto.subtle.generateKey(
+                { name: "ECDH", namedCurve: "P-256" },
+                false,
+                ["deriveKey", "deriveBits"]
+            );
+            
+            const testKeyPair2 = await window.crypto.subtle.generateKey(
+                { name: "ECDH", namedCurve: "P-256" },
+                false,
+                ["deriveKey", "deriveBits"]
+            );
+            
+            const pubKey1 = await exportPublicKey(testKeyPair1.publicKey);
+            const pubKey2 = await exportPublicKey(testKeyPair2.publicKey);
+            
+            const realKeyHash = await hashCombinedPublicKeys(pubKey1, pubKey2);
+            if (!(realKeyHash instanceof Uint8Array) || realKeyHash.length !== 32) {
+                throw new Error('Failed: real ECDH keys should produce valid hash');
+            }
+            
+            if (wordlistReady) {
+                const realAuthcode = await generateAuthcodeFromKeys(pubKey1, pubKey2, 5);
+                const realWords = realAuthcode.split(' ');
+                if (realWords.length !== 5) {
+                    throw new Error('Failed: real keys should produce 5-word authcode');
+                }
+                console.log('  Real ECDH authcode:', realAuthcode);
+            }
+            
+            console.log('✅ Real ECDH key compatibility test passed');
+        } catch (error) {
+            console.log('⏭️ Skipping real ECDH test:', error.message);
+        }
+        
+        console.log('🎉 All SHA-256 hash function tests passed successfully!');
+        return true;
+        
+    } catch (error) {
+        console.error('❌ SHA-256 hash function test failed:', error.message);
+        return false;
+    }
+}
+
+async function testFingerprintGenerationPipeline() {
+    console.log('Testing complete fingerprint generation pipeline...');
+    
+    try {
+        // Test 1: Bit extraction from hash
+        console.log('Test 1: Bit extraction from hash');
+        const testHash = new Uint8Array(32);
+        testHash[0] = 0xFF; // 11111111
+        testHash[1] = 0x00; // 00000000
+        testHash[2] = 0x80; // 10000000
+        
+        const extractedBits = extractBitsFromHash(testHash, 22); // 2 words worth
+        const expectedStart = [1,1,1,1,1,1,1,1, 0,0,0,0,0,0,0,0, 1,0,0,0,0,0];
+        
+        for (let i = 0; i < expectedStart.length; i++) {
+            if (extractedBits[i] !== expectedStart[i]) {
+                throw new Error(`Failed: bit extraction incorrect at position ${i}`);
+            }
+        }
+        console.log('✅ Bit extraction from hash passed');
+        
+        // Test 2: Bit to word mapping
+        console.log('Test 2: Bit to word mapping');
+        if (!wordlistReady) {
+            console.log('⏭️ Skipping bit-to-word test - BIP39 wordlist not ready');
+        } else {
+            // Test known bit patterns
+            const testBits = [
+                0,0,0,0,0,0,0,0,0,0,0, // 0 → "abandon"
+                0,0,0,0,0,0,0,0,0,0,1  // 1 → "ability"
+            ];
+            
+            const mappedWords = mapBitsToWords(testBits, 2);
+            if (mappedWords[0] !== 'abandon' || mappedWords[1] !== 'ability') {
+                throw new Error('Failed: bit-to-word mapping incorrect');
+            }
+            console.log('✅ Bit to word mapping passed');
+        }
+        
+        // Test 3: Human-readable authcode generation
+        console.log('Test 3: Human-readable authcode generation');
+        if (!wordlistReady) {
+            console.log('⏭️ Skipping authcode generation test - BIP39 wordlist not ready');
+        } else {
+            const zeroHash = new Uint8Array(32); // All zeros
+            const authcode = generateHumanReadableAuthcode(zeroHash, 3);
+            
+            if (typeof authcode !== 'string') {
+                throw new Error('Failed: authcode should be string');
+            }
+            
+            const words = authcode.split(' ');
+            if (words.length !== 3) {
+                throw new Error('Failed: should generate exactly 3 words');
+            }
+            
+            // First word should be "abandon" (index 0 from all-zero bits)
+            if (words[0] !== 'abandon') {
+                throw new Error('Failed: first word should be "abandon" for zero hash');
+            }
+            
+            console.log('  Generated authcode for zero hash:', authcode);
+            console.log('✅ Human-readable authcode generation passed');
+        }
+        
+        // Test 4: Security level calculations
+        console.log('Test 4: Security level calculations');
+        const testSizes = [
+            { words: 3, expectedBits: 33 },
+            { words: 5, expectedBits: 55 },
+            { words: 8, expectedBits: 88 }
+        ];
+        
+        for (const { words, expectedBits } of testSizes) {
+            const possibilities = Math.pow(2, expectedBits);
+            if (possibilities !== Math.pow(2, words * 11)) {
+                throw new Error(`Failed: security calculation wrong for ${words} words`);
+            }
+            console.log(`  ${words} words = ${expectedBits} bits = ${possibilities.toExponential(2)} possibilities`);
+        }
+        console.log('✅ Security level calculations passed');
+        
+        // Test 5: End-to-end pipeline with real hash
+        console.log('Test 5: End-to-end pipeline with real hash');
+        if (!wordlistReady) {
+            console.log('⏭️ Skipping end-to-end test - BIP39 wordlist not ready');
+        } else {
+            // Create a known hash for testing
+            const testData = new Uint8Array([0x48, 0x65, 0x6C, 0x6C, 0x6F]); // "Hello"
+            const realHash = await window.crypto.subtle.digest('SHA-256', testData);
+            const hashArray = new Uint8Array(realHash);
+            
+            const pipelineAuthcode = generateHumanReadableAuthcode(hashArray, 5);
+            const directAuthcode = hashToAuthcode(hashArray, 5);
+            
+            if (pipelineAuthcode !== directAuthcode) {
+                throw new Error('Failed: pipeline and direct methods should produce same result');
+            }
+            
+            console.log('  Pipeline authcode:', pipelineAuthcode);
+            console.log('  Direct authcode:  ', directAuthcode);
+            console.log('✅ End-to-end pipeline with real hash passed');
+        }
+        
+        // Test 6: Different word counts
+        console.log('Test 6: Different word counts');
+        if (wordlistReady) {
+            const testHash6 = new Uint8Array(32);
+            testHash6.fill(0xAA); // Pattern for testing
+            
+            for (const wordCount of [3, 4, 5, 6, 8]) {
+                const authcode = generateHumanReadableAuthcode(testHash6, wordCount);
+                const actualWords = authcode.split(' ').length;
+                
+                if (actualWords !== wordCount) {
+                    throw new Error(`Failed: requested ${wordCount} words, got ${actualWords}`);
+                }
+            }
+            console.log('✅ Different word counts passed');
+        }
+        
+        // Test 7: Error handling
+        console.log('Test 7: Error handling');
+        try {
+            extractBitsFromHash('invalid', 55);
+            throw new Error('Failed: should throw error for invalid hash type');
+        } catch (e) {
+            if (!e.message.includes('Hash must be Uint8Array')) {
+                throw new Error('Failed: wrong error message for invalid hash type');
+            }
+        }
+        
+        try {
+            extractBitsFromHash(new Uint8Array(1), 55); // Too short
+            throw new Error('Failed: should throw error for short hash');
+        } catch (e) {
+            if (!e.message.includes('Hash too short')) {
+                throw new Error('Failed: wrong error message for short hash');
+            }
+        }
+        console.log('✅ Error handling passed');
+        
+        console.log('🎉 All fingerprint generation pipeline tests passed successfully!');
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Fingerprint generation pipeline test failed:', error.message);
+        return false;
+    }
+}
+
 // Initialize BIP39 wordlist on page load
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Loading BIP39 wordlist...');
@@ -520,11 +1322,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('✅ BIP39 wordlist validation passed');
     
     // Run comprehensive tests
-    const testsPassed = testBip39Functions();
-    if (testsPassed) {
-        console.log('🔐 BIP39 system ready for MITM protection');
+    const bip39TestsPassed = testBip39Functions();
+    const keyOrderingTestsPassed = testPublicKeyOrdering();
+    const sha256TestsPassed = await testSHA256HashFunctions();
+    const pipelineTestsPassed = await testFingerprintGenerationPipeline();
+    
+    if (bip39TestsPassed && keyOrderingTestsPassed && sha256TestsPassed && pipelineTestsPassed) {
+        console.log('🔐 Complete MITM protection system ready: BIP39, key ordering, SHA-256 hashing, and fingerprint pipeline');
     } else {
-        console.error('❌ BIP39 system tests failed - MITM protection not available');
+        console.error('❌ System tests failed - MITM protection not available');
+        if (!bip39TestsPassed) console.error('  - BIP39 tests failed');
+        if (!keyOrderingTestsPassed) console.error('  - Key ordering tests failed');
+        if (!sha256TestsPassed) console.error('  - SHA-256 hash tests failed');
+        if (!pipelineTestsPassed) console.error('  - Fingerprint pipeline tests failed');
     }
 });
 

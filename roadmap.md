@@ -74,11 +74,11 @@ A forensics-resistant web chat service with end-to-end encryption using Diffie-H
 - [X] Test wordlist integrity and completeness
 
 ### 3.2 Fingerprint Generation System
-- [ ] Implement public key ordering function (canonical order for consistency)
-- [ ] Create SHA-256 hash function for combined public keys: `hash = SHA-256(ordered(pubkeyA, pubkeyB))`
-- [ ] Extract first N×11 bits from hash (default N=5 for 55-bit security)
-- [ ] Map extracted bits to BIP39 words using bit slicing
-- [ ] Generate human-readable authcode (e.g., "abandon ability able about above")
+- [X] Implement public key ordering function (canonical order for consistency)
+- [X] Create SHA-256 hash function for combined public keys: `hash = SHA-256(ordered(pubkeyA, pubkeyB))`
+- [X] Extract first N×11 bits from hash (default N=5 for 55-bit security)
+- [X] Map extracted bits to BIP39 words using bit slicing
+- [X] Generate human-readable authcode (e.g., "abandon ability able about above")
 
 ### 3.3 Authentication Flow Implementation
 - [ ] Add fingerprint computation after successful key exchange
