@@ -120,6 +120,14 @@ A forensics-resistant web chat service with end-to-end encryption using Diffie-H
 - [X] Enforce mandatory MITM protection verification (skip option removed for security)
 - [X] Document OOB channel security requirements and recommendations
 
+### 3.7 Advanced Security Features (December 2024)
+- [X] **Encrypted Verification Protocol**: Implement ACK/NACK system using established AES key
+- [X] **Enhanced MITM Detection**: Use encrypted confirmation to prevent verification spoofing
+- [X] **Secure Feedback Loop**: Ensure Alice receives authentic verification results from Bob
+- [X] **Remove Skip Option**: Eliminate security bypass to enforce mandatory verification
+- [X] **Improved Error Handling**: Add comprehensive error messages and security warnings
+- [X] **Simplified User Flow**: Replace manual input with visual comparison for better UX
+
 ## Phase 4: User Experience & Interface (Milestone 4)
 
 ### 4.1 User Interface Enhancement
