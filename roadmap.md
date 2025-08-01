@@ -53,30 +53,64 @@ A forensics-resistant web chat service with end-to-end encryption using Diffie-H
 - [X] Individual message encryption toggle: both sent and received messages have clickable lock icons, encrypted text shows as "🔒 [hex20bytes...]", stores encryptedData and plaintextContent on messageDiv DOM element
 - [X] Global lock/unlock all button: positioned below security status outside scrolling area, button text shows action to perform ("🔓 Unlock All" when locked, "🔒 Lock All" when unlocked), applies to all messages with encryption data
 - [X] Message structure with encryption: message header contains sender name and lock icon, message content shows encrypted hex or plaintext based on state, auto-scroll with multiple timing attempts for visibility
+- [X] **ENHANCED SECURITY**: Updated lock behavior to hold-to-view mode: messages display encrypted ciphertext by default, individual lock icons require holding down (mousedown/touchstart) to temporarily show plaintext, global "Hold to Show All" button works similarly - all messages return to encrypted state when released for maximum security
 
 
-## Phase 3: Security & Privacy Features (Milestone 3)
+### 2.4 Recent Security Enhancements (December 2024)
+- [X] **Hold-to-View Security Model**: Implemented enhanced security where encrypted messages are displayed as ciphertext by default with no persistent plaintext visibility
+- [X] **Individual Message Security**: Each message lock icon (🔒) requires active holding (mouse/touch) to temporarily reveal plaintext - releases immediately when pressure stops
+- [X] **Global Message Security**: "Hold to Show All" button (🔒 Hold to Show All) applies hold-to-view behavior to all encrypted messages simultaneously
+- [X] **Multi-Platform Support**: Added both mouse events (mousedown/mouseup/mouseleave) and touch events (touchstart/touchend) for mobile compatibility
+- [X] **Forensic Resistance**: Enhanced forensic resistance by eliminating persistent plaintext display - messages automatically return to encrypted state without user action
+- [X] **UI/UX Security**: Updated button labels and tooltips to clearly indicate hold-to-view functionality, preventing accidental plaintext exposure
 
-### 3.1 Memory Management
-- [ ] Implement secure memory clearing for keys
-- [ ] Ensure no plaintext messages stored in DOM
-- [ ] Add automatic cleanup of sensitive data
-- [ ] Implement session-only data storage
-- [ ] Add memory usage monitoring
+## Phase 3: MITM Protection & BIP39 Authentication (Milestone 3)
 
-### 3.2 Message Lifecycle Management
-- [ ] Implement message acknowledgment system
-- [ ] Add delivery confirmation mechanism
-- [ ] Create message state tracking (sent/delivered)
-- [ ] Implement automatic message clearing
-- [ ] Add message expiration handling
+### 3.1 BIP39 Wordlist Integration
+- [ ] Import BIP39 English wordlist (2048 words) into client code
+- [ ] Create wordlist validation and lookup functions
+- [ ] Implement bit-to-word mapping functions (11 bits per word)
+- [ ] Add word-to-index conversion for verification
+- [ ] Test wordlist integrity and completeness
 
-### 3.3 Enhanced Privacy Features
-- [ ] Implement ephemeral session keys
-- [ ] Add forward secrecy mechanisms
-- [ ] Create secure random ID generation
-- [ ] Implement metadata minimization
-- [ ] Add connection fingerprinting prevention
+### 3.2 Fingerprint Generation System
+- [ ] Implement public key ordering function (canonical order for consistency)
+- [ ] Create SHA-256 hash function for combined public keys: `hash = SHA-256(ordered(pubkeyA, pubkeyB))`
+- [ ] Extract first N×11 bits from hash (default N=5 for 55-bit security)
+- [ ] Map extracted bits to BIP39 words using bit slicing
+- [ ] Generate human-readable authcode (e.g., "abandon ability able about above")
+
+### 3.3 Authentication Flow Implementation
+- [ ] Add fingerprint computation after successful key exchange
+- [ ] Display Alice's 5-word authcode in UI with copy-to-clipboard functionality
+- [ ] Create verification input field for Bob to enter received authcode
+- [ ] Implement string comparison for authcode verification
+- [ ] Add visual feedback for successful/failed verification
+- [ ] Block message sending until authentication is complete
+
+### 3.4 User Interface for MITM Protection
+- [ ] Design authentication dialog/modal for fingerprint display
+- [ ] Add "Copy Authcode" button for Alice to share via OOB channel
+- [ ] Create "Enter Authcode" input field for Bob with paste functionality
+- [ ] Implement "Verify" button that compares computed vs received authcode
+- [ ] Add clear success/failure indicators with appropriate messaging
+- [ ] Show security status: "Verified" vs "Unverified" in connection status
+
+### 3.5 Security State Management
+- [ ] Add `isAuthenticated` flag to track verification status
+- [ ] Prevent message encryption/sending until authentication completes
+- [ ] Update security status indicators to show authentication state
+- [ ] Add re-verification mechanism if key exchange resets
+- [ ] Implement authentication timeout and retry mechanisms
+- [ ] Store authentication state only in memory (no persistence)
+
+### 3.6 Out-of-Band (OOB) Channel Integration
+- [ ] Add guidance text explaining OOB channel requirement
+- [ ] Create user instructions for secure authcode sharing (SMS, voice, in-person)
+- [ ] Implement QR code generation for authcode sharing (optional)
+- [ ] Add warning messages about MITM risks if verification is skipped
+- [ ] Create "Skip Verification" option with clear security warnings
+- [ ] Document OOB channel security requirements and recommendations
 
 ## Phase 4: User Experience & Interface (Milestone 4)
 
