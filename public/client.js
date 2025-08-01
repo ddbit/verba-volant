@@ -183,6 +183,351 @@ async function decryptMessage(ciphertext, iv, aesKey) {
     }
 }
 
+// BIP39 Wordlist and Validation Functions
+let BIP39_WORDLIST = null;
+let wordlistReady = false;
+
+async function loadBip39Wordlist() {
+    try {
+        const response = await fetch('../bip39/english.txt');
+        const text = await response.text();
+        BIP39_WORDLIST = text.trim().split('\n').map(word => word.trim().toLowerCase());
+        
+        if (BIP39_WORDLIST.length !== 2048) {
+            throw new Error(`Invalid wordlist length: ${BIP39_WORDLIST.length}, expected 2048`);
+        }
+        
+        // Check for duplicates
+        const uniqueWords = new Set(BIP39_WORDLIST);
+        if (uniqueWords.size !== 2048) {
+            throw new Error(`Duplicate words found in wordlist`);
+        }
+        
+        wordlistReady = true;
+        console.log('BIP39 wordlist loaded successfully');
+        return true;
+    } catch (error) {
+        console.error('Failed to load BIP39 wordlist:', error);
+        return false;
+    }
+}
+
+function validateBip39Wordlist() {
+    if (!BIP39_WORDLIST || BIP39_WORDLIST.length !== 2048) {
+        return { valid: false, error: 'Wordlist not loaded or invalid length' };
+    }
+    
+    // Check for duplicates
+    const uniqueWords = new Set(BIP39_WORDLIST);
+    if (uniqueWords.size !== 2048) {
+        return { valid: false, error: 'Duplicate words found' };
+    }
+    
+    // Check word format (lowercase, no special chars)
+    for (let i = 0; i < BIP39_WORDLIST.length; i++) {
+        const word = BIP39_WORDLIST[i];
+        if (!/^[a-z]+$/.test(word)) {
+            return { valid: false, error: `Invalid word format at index ${i}: "${word}"` };
+        }
+    }
+    
+    return { valid: true };
+}
+
+function isValidBip39Word(word) {
+    if (!wordlistReady || !BIP39_WORDLIST) {
+        console.warn('BIP39 wordlist not ready');
+        return false;
+    }
+    return BIP39_WORDLIST.includes(word.toLowerCase().trim());
+}
+
+function getWordIndex(word) {
+    if (!wordlistReady || !BIP39_WORDLIST) {
+        console.warn('BIP39 wordlist not ready');
+        return null;
+    }
+    const index = BIP39_WORDLIST.indexOf(word.toLowerCase().trim());
+    return index !== -1 ? index : null;
+}
+
+function getWordByIndex(index) {
+    if (!wordlistReady || !BIP39_WORDLIST) {
+        console.warn('BIP39 wordlist not ready');
+        return null;
+    }
+    return (index >= 0 && index < 2048) ? BIP39_WORDLIST[index] : null;
+}
+
+function validateAuthcodeWords(authcode) {
+    if (!wordlistReady) {
+        return { valid: false, error: 'BIP39 wordlist not ready' };
+    }
+    
+    const words = authcode.toLowerCase().trim().split(/\s+/);
+    
+    if (words.length !== 5) {
+        return { valid: false, error: `Expected 5 words, got ${words.length}` };
+    }
+    
+    for (let i = 0; i < words.length; i++) {
+        if (!isValidBip39Word(words[i])) {
+            return { valid: false, error: `Invalid word at position ${i + 1}: "${words[i]}"` };
+        }
+    }
+    
+    return { valid: true, words: words };
+}
+
+// Bit-to-word mapping functions (11 bits per word)
+function bitsToWords(bits, wordCount = 5) {
+    if (!wordlistReady) {
+        throw new Error('BIP39 wordlist not ready');
+    }
+    
+    if (bits.length < wordCount * 11) {
+        throw new Error(`Insufficient bits: need ${wordCount * 11}, got ${bits.length}`);
+    }
+    
+    const words = [];
+    for (let i = 0; i < wordCount; i++) {
+        // Extract 11 bits starting at position i * 11
+        const startBit = i * 11;
+        const endBit = startBit + 11;
+        const wordBits = bits.slice(startBit, endBit);
+        
+        // Convert 11 bits to integer (0-2047)
+        let wordIndex = 0;
+        for (let j = 0; j < wordBits.length; j++) {
+            wordIndex = (wordIndex << 1) | wordBits[j];
+        }
+        
+        if (wordIndex >= 2048) {
+            throw new Error(`Invalid word index: ${wordIndex}, must be 0-2047`);
+        }
+        
+        words.push(BIP39_WORDLIST[wordIndex]);
+    }
+    
+    return words;
+}
+
+function wordsToBits(words) {
+    if (!wordlistReady) {
+        throw new Error('BIP39 wordlist not ready');
+    }
+    
+    const bits = [];
+    for (const word of words) {
+        const wordIndex = getWordIndex(word);
+        if (wordIndex === null) {
+            throw new Error(`Invalid BIP39 word: "${word}"`);
+        }
+        
+        // Convert word index to 11 bits
+        const wordBits = [];
+        let index = wordIndex;
+        for (let i = 10; i >= 0; i--) {
+            wordBits[i] = index & 1;
+            index >>= 1;
+        }
+        
+        bits.push(...wordBits);
+    }
+    
+    return bits;
+}
+
+function bytesToBits(bytes) {
+    const bits = [];
+    for (const byte of bytes) {
+        for (let i = 7; i >= 0; i--) {
+            bits.push((byte >> i) & 1);
+        }
+    }
+    return bits;
+}
+
+function bitsToBytes(bits) {
+    const bytes = [];
+    for (let i = 0; i < bits.length; i += 8) {
+        let byte = 0;
+        for (let j = 0; j < 8 && i + j < bits.length; j++) {
+            byte = (byte << 1) | bits[i + j];
+        }
+        bytes.push(byte);
+    }
+    return new Uint8Array(bytes);
+}
+
+function hashToAuthcode(hashBytes, wordCount = 5) {
+    if (!wordlistReady) {
+        throw new Error('BIP39 wordlist not ready');
+    }
+    
+    // Convert hash bytes to bits
+    const bits = bytesToBits(hashBytes);
+    
+    // Take first N×11 bits (default 5×11 = 55 bits)
+    const requiredBits = wordCount * 11;
+    if (bits.length < requiredBits) {
+        throw new Error(`Hash too short: need ${requiredBits} bits, got ${bits.length}`);
+    }
+    
+    const authcodeBits = bits.slice(0, requiredBits);
+    
+    // Convert bits to words
+    const words = bitsToWords(authcodeBits, wordCount);
+    
+    return words.join(' ');
+}
+
+// Test functions for BIP39 implementation
+function testBip39Functions() {
+    console.log('Testing BIP39 functions...');
+    
+    try {
+        // Test 1: Basic word validation
+        console.log('Test 1: Basic word validation');
+        if (!isValidBip39Word('abandon')) {
+            throw new Error('Failed: "abandon" should be valid');
+        }
+        if (isValidBip39Word('invalid')) {
+            throw new Error('Failed: "invalid" should not be valid');
+        }
+        if (!isValidBip39Word('ABANDON')) {
+            throw new Error('Failed: case insensitive validation should work');
+        }
+        console.log('✅ Basic word validation passed');
+        
+        // Test 2: Word-to-index conversion
+        console.log('Test 2: Word-to-index conversion');
+        if (getWordIndex('abandon') !== 0) {
+            throw new Error('Failed: "abandon" should have index 0');
+        }
+        if (getWordIndex('zoo') !== 2047) {
+            throw new Error('Failed: "zoo" should have index 2047');
+        }
+        if (getWordIndex('invalid') !== null) {
+            throw new Error('Failed: invalid word should return null');
+        }
+        console.log('✅ Word-to-index conversion passed');
+        
+        // Test 3: Index-to-word conversion
+        console.log('Test 3: Index-to-word conversion');
+        if (getWordByIndex(0) !== 'abandon') {
+            throw new Error('Failed: index 0 should return "abandon"');
+        }
+        if (getWordByIndex(2047) !== 'zoo') {
+            throw new Error('Failed: index 2047 should return "zoo"');
+        }
+        if (getWordByIndex(2048) !== null) {
+            throw new Error('Failed: invalid index should return null');
+        }
+        console.log('✅ Index-to-word conversion passed');
+        
+        // Test 4: Bit manipulation functions
+        console.log('Test 4: Bit manipulation functions');
+        const testBytes = new Uint8Array([0xFF, 0x00, 0x80]); // 11111111 00000000 10000000
+        const expectedBits = [1,1,1,1,1,1,1,1, 0,0,0,0,0,0,0,0, 1,0,0,0,0,0,0,0];
+        const bits = bytesToBits(testBytes);
+        if (JSON.stringify(bits) !== JSON.stringify(expectedBits)) {
+            throw new Error('Failed: bytesToBits conversion incorrect');
+        }
+        
+        const backToBytes = bitsToBytes(bits);
+        if (JSON.stringify(Array.from(backToBytes)) !== JSON.stringify(Array.from(testBytes))) {
+            throw new Error('Failed: bitsToBytes conversion incorrect');
+        }
+        console.log('✅ Bit manipulation functions passed');
+        
+        // Test 5: Word-bit conversion
+        console.log('Test 5: Word-bit conversion');
+        const testWords = ['abandon', 'ability']; // indices 0, 1
+        const wordBits = wordsToBits(testWords);
+        // abandon = 0 = 00000000000 (11 bits)
+        // ability = 1 = 00000000001 (11 bits)
+        const expectedWordBits = [0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,1];
+        if (JSON.stringify(wordBits) !== JSON.stringify(expectedWordBits)) {
+            throw new Error('Failed: wordsToBits conversion incorrect');
+        }
+        
+        const backToWords = bitsToWords(wordBits, 2);
+        if (JSON.stringify(backToWords) !== JSON.stringify(testWords)) {
+            throw new Error('Failed: bitsToWords conversion incorrect');
+        }
+        console.log('✅ Word-bit conversion passed');
+        
+        // Test 6: Authcode validation
+        console.log('Test 6: Authcode validation');
+        const validAuthcode = 'abandon ability able about above';
+        const validation1 = validateAuthcodeWords(validAuthcode);
+        if (!validation1.valid) {
+            throw new Error('Failed: valid authcode should pass validation');
+        }
+        
+        const invalidAuthcode = 'abandon ability invalid about above';
+        const validation2 = validateAuthcodeWords(invalidAuthcode);
+        if (validation2.valid) {
+            throw new Error('Failed: invalid authcode should fail validation');
+        }
+        
+        const shortAuthcode = 'abandon ability';
+        const validation3 = validateAuthcodeWords(shortAuthcode);
+        if (validation3.valid) {
+            throw new Error('Failed: short authcode should fail validation');
+        }
+        console.log('✅ Authcode validation passed');
+        
+        // Test 7: Hash-to-authcode conversion
+        console.log('Test 7: Hash-to-authcode conversion');
+        // Create a test hash (32 bytes of known data)
+        const testHash = new Uint8Array(32);
+        testHash[0] = 0x00; // First byte = 0, should map to first word indices
+        
+        const authcode = hashToAuthcode(testHash, 5);
+        const authcodeWords = authcode.split(' ');
+        if (authcodeWords.length !== 5) {
+            throw new Error('Failed: authcode should have 5 words');
+        }
+        
+        // First word should be 'abandon' (index 0) since first 11 bits are 0
+        if (authcodeWords[0] !== 'abandon') {
+            throw new Error('Failed: first word should be "abandon" for zero hash');
+        }
+        console.log('✅ Hash-to-authcode conversion passed');
+        
+        console.log('🎉 All BIP39 tests passed successfully!');
+        return true;
+        
+    } catch (error) {
+        console.error('❌ BIP39 test failed:', error.message);
+        return false;
+    }
+}
+
+// Initialize BIP39 wordlist on page load
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('Loading BIP39 wordlist...');
+    await loadBip39Wordlist();
+    
+    console.log('Validating BIP39 wordlist...');
+    const validation = validateBip39Wordlist();
+    if (!validation.valid) {
+        console.error('BIP39 wordlist validation failed:', validation.error);
+        return;
+    }
+    console.log('✅ BIP39 wordlist validation passed');
+    
+    // Run comprehensive tests
+    const testsPassed = testBip39Functions();
+    if (testsPassed) {
+        console.log('🔐 BIP39 system ready for MITM protection');
+    } else {
+        console.error('❌ BIP39 system tests failed - MITM protection not available');
+    }
+});
+
 // Event listeners
 joinRoomButton.addEventListener('click', joinRoom);
 leaveRoomButton.addEventListener('click', leaveRoom);

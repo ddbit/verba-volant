@@ -67,11 +67,11 @@ A forensics-resistant web chat service with end-to-end encryption using Diffie-H
 ## Phase 3: MITM Protection & BIP39 Authentication (Milestone 3)
 
 ### 3.1 BIP39 Wordlist Integration
-- [ ] Import BIP39 English wordlist (2048 words) into client code
-- [ ] Create wordlist validation and lookup functions
-- [ ] Implement bit-to-word mapping functions (11 bits per word)
-- [ ] Add word-to-index conversion for verification
-- [ ] Test wordlist integrity and completeness
+- [X] Import BIP39 English wordlist (2048 words) into client code
+- [X] Create wordlist validation and lookup functions
+- [X] Implement bit-to-word mapping functions (11 bits per word)
+- [X] Add word-to-index conversion for verification
+- [X] Test wordlist integrity and completeness
 
 ### 3.2 Fingerprint Generation System
 - [ ] Implement public key ordering function (canonical order for consistency)
