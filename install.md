@@ -25,5 +25,5 @@ The communication is always between Alice and Bob, no more participants are allo
 
 Check the issues on github project. At the moment the client can't be used as a webapp served via ```http://``` because of browser restrictions that require ```https://``` protocol from remote loading.
 
-As a workaround you can be server via ```file://``` protocol. Save the the folder ```public``` in your computer and click on the index.html file. The client is a vanilla static page which loads his styles and his javascript. No other deps required. For a better experience I recommend to load index.html in a first browser window (which will be Alice) and then use a different browser or browser profile to load as Bob.
+As a workaround, the client can be served via ```file://``` protocol. Save the the folder ```public``` in your computer and click on the index.html file. The client is a vanilla static page which loads his styles and his javascript. No other deps required. For a better experience I recommend to load index.html in a first browser window (which will be Alice) and then use a different browser or browser profile to load as Bob.
 
