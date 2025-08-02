@@ -39,9 +39,26 @@ let remotePublicKeyRaw = null;
 let computedAuthcode = null;
 let authenticationInProgress = false;
 
+// Crypto compatibility check
+function checkCryptoSupport() {
+    if (!window.isSecureContext) {
+        throw new Error('Secure context (HTTPS) required for cryptographic operations');
+    }
+    
+    if (!window.crypto || !window.crypto.subtle) {
+        throw new Error('Web Crypto API not supported');
+    }
+    
+    // Safari iOS specific check
+    if (navigator.userAgent.includes('Safari') && navigator.userAgent.includes('Mobile')) {
+        console.log('Safari iOS detected - ensuring crypto API compatibility');
+    }
+}
+
 // Cryptographic functions
 async function generateKeyPair() {
     try {
+        checkCryptoSupport();
         keyPair = await window.crypto.subtle.generateKey(
             {
                 name: "ECDH",
