@@ -21,7 +21,7 @@ The server will listen for incoming connection on port 31415 (the pi-port)
 
 The communication is always between Alice and Bob, no more participants are allowed. Is this a limit? Yes. But Verba Volant is not aimed at groups communications. Use other tools instead.
 
-## Known issues
+## Launch the client and Known issues
 
 Check the issues on github project. At the moment the client can't be used as a webapp served via ```http://``` because of browser restrictions that require ```https://``` protocol from remote loading.
 
