@@ -1,19 +1,55 @@
 const WebSocket = require('ws');
 const http = require('http');
+const https = require('https');
 const path = require('path');
 const fs = require('fs');
 
 const PORT = process.env.PORT || 31415;
+const SSL_KEY = process.env.SSL_KEY || '/path/to/private.key';
+const SSL_CERT = process.env.SSL_CERT || '/path/to/certificate.crt';
 
 const rooms = new Map();
 
-const server = http.createServer((req, res) => {
-  // Security: No static file serving - client files must be distributed separately
-  res.writeHead(404, { 'Content-Type': 'text/plain' });
-  res.end('Static files not served. Use distributed client files.');
-});
+// Create server (HTTP or HTTPS based on SSL cert availability)
+let server;
+try {
+  if (fs.existsSync(SSL_KEY) && fs.existsSync(SSL_CERT)) {
+    const httpsOptions = {
+      key: fs.readFileSync(SSL_KEY),
+      cert: fs.readFileSync(SSL_CERT)
+    };
+    server = https.createServer(httpsOptions, (req, res) => {
+      // Security: No static file serving - client files must be distributed separately
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Static files not served. Use distributed client files.');
+    });
+    console.log('HTTPS server created with SSL certificates');
+  } else {
+    server = http.createServer((req, res) => {
+      // Security: No static file serving - client files must be distributed separately
+      res.writeHead(404, { 'Content-Type': 'text/plain' });  
+      res.end('Static files not served. Use distributed client files.');
+    });
+    console.log('HTTP server created (SSL certificates not found)');
+  }
+} catch (error) {
+  console.error('Error reading SSL certificates, falling back to HTTP:', error.message);
+  server = http.createServer((req, res) => {
+    // Security: No static file serving - client files must be distributed separately
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Static files not served. Use distributed client files.');
+  });
+}
 
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ 
+  server,
+  verifyClient: (info) => {
+    // Allow cross-origin requests
+    const origin = info.origin;
+    console.log(`WebSocket connection attempt from origin: ${origin}`);
+    return true; // Allow all origins - modify this for production security
+  }
+});
 
 function joinRoom(ws, roomId) {
   if (!rooms.has(roomId)) {
