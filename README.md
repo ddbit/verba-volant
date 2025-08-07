@@ -34,14 +34,16 @@ Unlike apps like Signal, Telegram, or WhatsApp, which store encrypted messages o
 2. **Bob receives this code** from Alice through a separate channel (e.g., SMS, voice, etc.).
 3. Both browsers connect via WebSocket and exchange **ephemeral ECDH keys**.
 4. Both derive a shared secret key.
-5. Alice sends Bob a “verification code” made of words, which Bob checks to confirm authenticity.
+5. Alice sends Bob a “verification code” made of BIP39 words, which Bob checks to confirm authenticity.
 6. Only after confirmation, messages can be sent and read.
 
 ---
 
 ## What makes Verba Volant unique
 
-One of its most distinctive features is the use of **BIP39 words**—commonly used in cryptocurrency wallets—for manual fingerprint verification. This gives Verba Volant a rare combination of cryptographic strength and human readability, enabling users to verify key authenticity with minimal effort.
+The focus of Verba Volant is to leave no footprints in user devices. This is the first and foremost objective of a forensics-resistant system.
+
+Another of its most distinctive features is the use of **BIP39 words**—commonly used for recovery of Bitcoin wallets—for manual fingerprint verification. This gives Verba Volant a rare combination of cryptographic strength and human readability, enabling users to verify key authenticity with minimal effort.
 
 ### 🔐 True end-to-end encryption
 
