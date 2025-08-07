@@ -1,13 +1,14 @@
-# How to launch the client and known issues
+## TL;DR Quick launch
 
-The client can be served via ```file://``` protocol. Save the the folder ```public``` in your computer and click on the index.html file. The client is a vanilla static page which loads his styles and his javascript. No other deps required. 
+A [vv-client.zip](vv-client.zip) with the html/js/css code is available for a quick test. Uncompress and click on index.html
+
+For a longer description read below.
+
+## The client index.html
+
+The client can be loaded via ```file://``` protocol. Save the the folder ```public``` in your computer and click on the index.html file. The client is a vanilla static page which loads his styles and his javascript. No other deps required. 
 
 For a better experience I recommend to load index.html in a first browser window (which will be Alice) and then use a different browser or browser profile to load as Bob.
-
-
-## Quick launch
-
-A [vv-client.zip](vv-client.zip) with the html/js/css code is available for a quick test.
 
 ## HTTPS Issue
 
